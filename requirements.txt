@@ -1,0 +1,17 @@
+flask
+flask-sqlalchemy
+flask-login
+werkzeug
+pandas
+plotly
+openpyxl
+xlrd
+numpy
+google-generativeai
+openai
+anthropic
+pdfplumber
+python-docx
+python-pptx
+pyyaml
+lxml

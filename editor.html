@@ -1,0 +1,558 @@
+{% extends 'base.html' %}
+{% block title %}Data Editor — Biz-Analyst{% endblock %}
+{% block head %}
+<style>
+  /* ── Layout ── */
+  .editor-layout{display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start}
+  @media(max-width:900px){.editor-layout{grid-template-columns:1fr}}
+
+  /* ── Sidebar ── */
+  .editor-sidebar{position:sticky;top:80px;display:flex;flex-direction:column;gap:14px}
+  .side-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
+  .side-title{font-size:13px;font-weight:700;color:var(--subtext);text-transform:uppercase;
+              letter-spacing:.6px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+
+  /* AI instruction box */
+  .ai-inst-ta{width:100%;background:var(--surface);border:1px solid var(--border);
+              border-radius:10px;padding:11px 14px;color:var(--text);font-size:13px;
+              font-family:'Inter',sans-serif;resize:vertical;min-height:100px;
+              outline:none;transition:border-color .2s;margin-bottom:12px}
+  .ai-inst-ta:focus{border-color:var(--accent)}
+  .ai-inst-ta::placeholder{color:var(--muted)}
+
+  /* Quick action chips */
+  .quick-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .qchip{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+         font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;transition:all .2s}
+  .qchip:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* AI code preview */
+  .code-block{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+              padding:12px;font-family:'Courier New',monospace;font-size:12px;
+              color:#a6e3a1;max-height:160px;overflow-y:auto;white-space:pre-wrap;
+              word-break:break-all;display:none;margin-top:10px}
+
+  /* Provider picker */
+  .prov-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .ep-btn{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+          font-size:11px;font-weight:600;padding:5px 11px;border-radius:7px;cursor:pointer;transition:all .2s}
+  .ep-btn:hover,.ep-btn.active{background:rgba(137,180,250,.12);border-color:var(--accent);color:var(--accent)}
+  .ep-btn.locked{opacity:.3;cursor:default}
+
+  /* Status bar */
+  .status-bar{display:flex;align-items:center;justify-content:space-between;
+              background:var(--surface);border:1px solid var(--border);border-radius:10px;
+              padding:10px 16px;margin-bottom:14px;font-size:13px;flex-wrap:wrap;gap:8px}
+  .status-tag{display:flex;align-items:center;gap:6px;color:var(--subtext)}
+  .status-val{color:var(--accent);font-weight:700}
+
+  /* Action buttons row */
+  .action-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+
+  /* Table editor */
+  .tbl-editor-wrap{overflow:auto;max-height:600px;border:1px solid var(--border);border-radius:12px}
+  #editorTable{width:100%;border-collapse:collapse;font-size:13px;min-width:600px}
+  #editorTable thead th{background:var(--surface);color:var(--accent);font-weight:600;
+                         padding:10px 12px;border-bottom:1px solid var(--border);
+                         white-space:nowrap;position:sticky;top:0;z-index:10}
+  #editorTable thead th .col-head{display:flex;align-items:center;gap:6px}
+  #editorTable thead th .del-col{color:var(--red);cursor:pointer;font-size:14px;
+                                  opacity:0;transition:opacity .2s;margin-left:auto}
+  #editorTable thead th:hover .del-col{opacity:1}
+  #editorTable tbody td{padding:0;border-bottom:1px solid var(--surface);
+                         border-right:1px solid var(--surface)}
+  #editorTable tbody td:last-child{border-right:none}
+  #editorTable tbody tr:last-child td{border-bottom:none}
+  #editorTable tbody tr:hover td{background:rgba(137,180,250,.04)}
+
+  /* Row checkbox + delete */
+  .row-cb{width:32px;text-align:center;padding:8px!important}
+  .row-num{color:var(--muted);font-size:11px;padding:8px 10px!important;
+           white-space:nowrap;text-align:right;min-width:40px}
+
+  /* Editable cell */
+  .cell-input{width:100%;min-width:80px;background:transparent;border:none;
+              padding:8px 10px;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;
+              outline:none;transition:background .15s}
+  .cell-input:focus{background:rgba(137,180,250,.08);border-radius:4px}
+  .cell-input.changed{background:rgba(249,226,175,.08);color:var(--yellow)}
+
+  /* Add row / col buttons */
+  .add-row-btn{width:100%;padding:10px;background:rgba(137,180,250,.05);
+               border:none;border-top:1px solid var(--border);color:var(--subtext);
+               font-size:13px;cursor:pointer;transition:background .2s}
+  .add-row-btn:hover{background:rgba(137,180,250,.12);color:var(--accent)}
+
+  /* Messages */
+  .msg-bar{display:none;border-radius:10px;padding:12px 16px;
+           font-size:13px;font-weight:500;margin-bottom:14px}
+  .msg-bar.success{background:rgba(166,227,161,.1);border:1px solid rgba(166,227,161,.3);color:var(--green)}
+  .msg-bar.error{background:rgba(243,139,168,.1);border:1px solid rgba(243,139,168,.3);color:var(--red)}
+  .msg-bar.info{background:rgba(137,180,250,.1);border:1px solid rgba(137,180,250,.3);color:var(--accent)}
+
+  /* Upload zone (small) */
+  .mini-upload{border:2px dashed var(--border);border-radius:12px;padding:20px;
+               text-align:center;cursor:pointer;transition:all .2s;position:relative}
+  .mini-upload:hover{border-color:var(--accent)}
+  .mini-upload input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .mini-upload p{font-size:13px;color:var(--subtext);margin-top:6px}
+
+  /* Loader overlay */
+  #editorLoader{display:none;text-align:center;padding:40px}
+
+  /* Column rename input */
+  .col-rename{background:transparent;border:none;border-bottom:1px dashed var(--border);
+              color:var(--accent);font-size:13px;font-weight:600;font-family:'Inter',sans-serif;
+              outline:none;width:100%;max-width:120px;padding:2px 4px}
+  .col-rename:focus{border-bottom-color:var(--accent)}
+
+  /* Diff highlight */
+  .cell-new{animation:flash .8s ease}
+  @keyframes flash{0%{background:rgba(166,227,161,.25)}100%{background:transparent}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page">
+
+  <div class="sec-title" style="margin-bottom:20px">
+    <div class="sec-dot"></div> Data Editor
+    <span style="font-size:13px;color:var(--subtext);font-weight:400;margin-left:4px">— Edit any data with AI or manually</span>
+  </div>
+
+  <div id="msgBar" class="msg-bar"></div>
+
+  <div class="editor-layout">
+
+    <!-- ── SIDEBAR ── -->
+    <div class="editor-sidebar">
+
+      <!-- Load data -->
+      <div class="side-card">
+        <div class="side-title">📂 Load Data</div>
+        <button class="btn btn-primary" onclick="loadSession()" style="width:100%;justify-content:center;margin-bottom:10px">
+          📊 Use Current Analysis Data
+        </button>
+        <div class="mini-upload" id="editorDrop">
+          <input type="file" id="editorFile"
+            accept=".csv,.xlsx,.xls,.ods,.pdf,.docx,.json,.txt,.xml,.html"/>
+          <div style="font-size:24px">📁</div>
+          <p>Or upload a new file</p>
+        </div>
+      </div>
+
+      <!-- AI Edit -->
+      <div class="side-card">
+        <div class="side-title">🤖 AI Edit Instructions</div>
+        <div class="prov-row" id="editorProviders">
+          <button class="ep-btn" data-p="gemini"   onclick="setEdProv('gemini')">Gemini</button>
+          <button class="ep-btn" data-p="chatgpt"  onclick="setEdProv('chatgpt')">ChatGPT</button>
+          <button class="ep-btn" data-p="claude"   onclick="setEdProv('claude')">Claude</button>
+          <button class="ep-btn" data-p="deepseek" onclick="setEdProv('deepseek')">DeepSeek</button>
+        </div>
+        <textarea class="ai-inst-ta" id="aiInstruction"
+          placeholder="Tell AI what to do with your data...&#10;&#10;Examples:&#10;• Delete the Age column&#10;• Fill empty cells with 0&#10;• Sort by Revenue descending&#10;• Add column Total = Price × Qty&#10;• Rename column 'amt' to 'Amount'&#10;• Filter rows where Sales > 500&#10;• Convert Date to datetime format&#10;• Remove duplicate rows"></textarea>
+        <div class="quick-chips">
+          <span class="qchip" onclick="setInstr('Fill all missing values with 0')">Fill nulls with 0</span>
+          <span class="qchip" onclick="setInstr('Remove all duplicate rows')">Remove duplicates</span>
+          <span class="qchip" onclick="setInstr('Sort by the first numeric column descending')">Sort ↓</span>
+          <span class="qchip" onclick="setInstr('Convert all column names to lowercase and replace spaces with underscores')">Fix col names</span>
+          <span class="qchip" onclick="setInstr('Add a column called Row_Number with sequential row numbers starting from 1')">Add row numbers</span>
+          <span class="qchip" onclick="setInstr('Round all numeric columns to 2 decimal places')">Round numbers</span>
+          <span class="qchip" onclick="setInstr('Remove all rows where any cell is empty or null')">Drop empty rows</span>
+          <span class="qchip" onclick="setInstr('Calculate the percentage share of the first numeric column and add as a new column called Percentage')">Add % column</span>
+        </div>
+        <button class="btn btn-primary" onclick="runAiEdit()" style="width:100%;justify-content:center">
+          ✨ Apply AI Edit
+        </button>
+        <div class="code-block" id="aiCodeBlock"></div>
+      </div>
+
+      <!-- Manual actions -->
+      <div class="side-card">
+        <div class="side-title">🛠️ Manual Actions</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-ghost" onclick="addRow()" style="width:100%;justify-content:center">
+            ➕ Add New Row
+          </button>
+          <button class="btn btn-ghost" onclick="promptAddCol()" style="width:100%;justify-content:center">
+            ➕ Add New Column
+          </button>
+          <button class="btn btn-ghost" onclick="deleteSelectedRows()" style="width:100%;justify-content:center">
+            🗑️ Delete Selected Rows
+          </button>
+          <button class="btn btn-ghost" onclick="saveManualEdits()" style="width:100%;justify-content:center">
+            💾 Save Manual Edits
+          </button>
+          <button class="btn btn-ghost" onclick="undoEdit()" style="width:100%;justify-content:center">
+            ↩️ Undo Last Edit
+          </button>
+          <button class="btn btn-primary" onclick="downloadCSV()" style="width:100%;justify-content:center">
+            ⬇️ Download as CSV
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── MAIN TABLE ── -->
+    <div>
+      <div class="status-bar" id="statusBar">
+        <div class="status-tag">📋 No data loaded yet</div>
+        <div class="status-tag">Select data from the left panel to begin editing</div>
+      </div>
+
+      <div id="editorLoader">
+        <div class="spinner"></div>
+        <div style="color:var(--subtext);margin-top:8px">Processing...</div>
+      </div>
+
+      <div id="tableWrap" style="display:none">
+        <div class="tbl-editor-wrap">
+          <table id="editorTable">
+            <thead id="tblHead"></thead>
+            <tbody id="tblBody"></tbody>
+          </table>
+        </div>
+        <button class="add-row-btn" onclick="addRow()">+ Add Row</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Add column modal -->
+<div id="addColModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+     z-index:1000;display:none;align-items:center;justify-content:center">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;
+              padding:28px;width:100%;max-width:400px;margin:20px">
+    <h3 style="margin-bottom:16px;font-size:16px">Add New Column</h3>
+    <div class="form-group">
+      <label class="form-label">Column Name</label>
+      <input class="form-input" id="newColName" placeholder="e.g. Total, Status, Notes"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Default Value (optional)</label>
+      <input class="form-input" id="newColVal" placeholder="e.g. 0, N/A, or leave empty"/>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-primary" onclick="confirmAddCol()" style="flex:1;justify-content:center">Add Column</button>
+      <button class="btn btn-ghost" onclick="closeModal()" style="flex:1;justify-content:center">Cancel</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  let tableData = { columns: [], rows: [] };
+  let editorProvider = 'gemini';
+  let pendingEdits = [];   // [{row, col, value}]
+  let selectedRows = new Set();
+
+  const PLABELS = {gemini:'🟢 Gemini',chatgpt:'🟡 ChatGPT',claude:'🟣 Claude',deepseek:'🔵 DeepSeek'};
+
+  // ── Init ────────────────────────────────────────────────────────────────
+  window.addEventListener('load', () => {
+    fetch('/providers').then(r=>r.json()).then(s=>{
+      document.querySelectorAll('.ep-btn').forEach(b=>{
+        const p=b.dataset.p;
+        b.classList.toggle('locked', !s[p]);
+      });
+      for(const p of ['gemini','chatgpt','claude','deepseek']){
+        if(s[p]){ setEdProv(p); break; }
+      }
+    }).catch(()=>{});
+  });
+
+  function setEdProv(p){
+    editorProvider = p;
+    document.querySelectorAll('.ep-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.p===p);
+    });
+  }
+
+  // ── Load data ────────────────────────────────────────────────────────────
+  function loadSession(){
+    showLoader();
+    fetch('/editor/load', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({source:'session'})
+    }).then(r=>r.json()).then(d=>{
+      hideLoader();
+      if(d.error){ showMsg(d.error,'error'); return; }
+      tableData = d;
+      renderTable();
+      updateStatus();
+      showMsg('✅ Data loaded successfully — '+d.shape[0].toLocaleString()+' rows × '+d.shape[1]+' columns','success');
+    }).catch(()=>{ hideLoader(); showMsg('Failed to load data.','error'); });
+  }
+
+  // Upload new file
+  const edFile = document.getElementById('editorFile');
+  const edDrop = document.getElementById('editorDrop');
+  edFile.addEventListener('change', ()=>{ if(edFile.files[0]) uploadEditorFile(edFile.files[0]); });
+  edDrop.addEventListener('dragover', e=>{ e.preventDefault(); edDrop.style.borderColor='var(--accent)'; });
+  edDrop.addEventListener('dragleave', ()=>{ edDrop.style.borderColor=''; });
+  edDrop.addEventListener('drop', e=>{
+    e.preventDefault(); edDrop.style.borderColor='';
+    if(e.dataTransfer.files[0]) uploadEditorFile(e.dataTransfer.files[0]);
+  });
+
+  function uploadEditorFile(file){
+    showLoader();
+    const fd = new FormData(); fd.append('file', file);
+    fetch('/editor/upload', {method:'POST', body: fd})
+    .then(r=>r.json()).then(d=>{
+      hideLoader();
+      if(d.error){ showMsg(d.error,'error'); return; }
+      tableData = d;
+      renderTable();
+      updateStatus();
+      showMsg('✅ '+d.filename+' loaded — '+d.shape[0].toLocaleString()+' rows × '+d.shape[1]+' columns','success');
+    }).catch(()=>{ hideLoader(); showMsg('Upload failed.','error'); });
+  }
+
+  // ── AI Edit ──────────────────────────────────────────────────────────────
+  function setInstr(text){ document.getElementById('aiInstruction').value = text; }
+
+  function runAiEdit(){
+    const instr = document.getElementById('aiInstruction').value.trim();
+    if(!instr){ showMsg('Please enter an instruction for AI.','error'); return; }
+    if(!tableData.rows.length){ showMsg('Load data first before editing.','error'); return; }
+
+    showLoader('AI is processing your instruction...');
+    const cb = document.getElementById('aiCodeBlock');
+    cb.style.display='none'; cb.textContent='';
+
+    fetch('/editor/ai_edit', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({instruction: instr, provider: editorProvider})
+    }).then(r=>r.json()).then(d=>{
+      hideLoader();
+      if(d.error){
+        showMsg('⚠️ '+d.error,'error');
+        if(d.ai_code){ cb.textContent=d.ai_code; cb.style.display='block'; }
+        return;
+      }
+      tableData = d;
+      renderTable();
+      updateStatus();
+      showMsg(d.message + ' (' + d.changes + ')','success');
+      if(d.ai_code){
+        cb.textContent = '# AI-generated code:\n' + d.ai_code;
+        cb.style.display='block';
+      }
+      document.getElementById('aiInstruction').value='';
+    }).catch(()=>{ hideLoader(); showMsg('AI edit failed. Check Flask logs.','error'); });
+  }
+
+  // ── Render table ─────────────────────────────────────────────────────────
+  function renderTable(){
+    const head = document.getElementById('tblHead');
+    const body = document.getElementById('tblBody');
+    const cols = tableData.columns;
+    const rows = tableData.rows;
+
+    // Header
+    head.innerHTML = `<tr>
+      <th class="row-cb"><input type="checkbox" onchange="toggleAllRows(this)"/></th>
+      <th class="row-num">#</th>
+      ${cols.map(c=>`
+        <th>
+          <div class="col-head">
+            <input class="col-rename" value="${esc(c)}" data-orig="${esc(c)}"
+                   onblur="renameCol(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
+            <span class="del-col" onclick="deleteCol('${esc(c)}')" title="Delete column">✕</span>
+          </div>
+        </th>`).join('')}
+    </tr>`;
+
+    // Body
+    body.innerHTML = rows.map((row, ri) => `
+      <tr data-row="${ri}">
+        <td class="row-cb">
+          <input type="checkbox" class="row-select" data-row="${ri}"
+                 onchange="toggleRowSelect(${ri}, this.checked)"/>
+        </td>
+        <td class="row-num">${ri+1}</td>
+        ${cols.map(c=>`
+          <td>
+            <input class="cell-input" value="${esc(String(row[c]||''))}"
+                   data-row="${ri}" data-col="${esc(c)}"
+                   oninput="markChanged(this)"
+                   onblur="trackEdit(this)"/>
+          </td>`).join('')}
+      </tr>`).join('');
+
+    document.getElementById('tableWrap').style.display='block';
+    pendingEdits = [];
+    selectedRows.clear();
+  }
+
+  function markChanged(inp){
+    inp.classList.add('changed');
+  }
+
+  function trackEdit(inp){
+    const r = parseInt(inp.dataset.row);
+    const c = inp.dataset.col;
+    const v = inp.value;
+    // Remove old edit for same cell
+    pendingEdits = pendingEdits.filter(e=>!(e.row===r && e.col===c));
+    pendingEdits.push({row:r, col:c, value:v});
+  }
+
+  // ── Manual edits ─────────────────────────────────────────────────────────
+  function saveManualEdits(){
+    if(!pendingEdits.length && !selectedRows.size){
+      showMsg('No changes to save.','info'); return;
+    }
+    showLoader('Saving changes...');
+    fetch('/editor/manual_edit', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({edits: pendingEdits})
+    }).then(r=>r.json()).then(d=>{
+      hideLoader();
+      if(d.error){ showMsg(d.error,'error'); return; }
+      tableData = d; renderTable(); updateStatus();
+      showMsg('✅ Changes saved!','success');
+    }).catch(()=>{ hideLoader(); showMsg('Save failed.','error'); });
+  }
+
+  function addRow(){
+    const newRow = {};
+    tableData.columns.forEach(c => newRow[c] = '');
+    tableData.rows.push(newRow);
+    renderTable();
+    // Scroll to bottom
+    const wrap = document.querySelector('.tbl-editor-wrap');
+    wrap.scrollTop = wrap.scrollHeight;
+    showMsg('New row added — fill in values then click Save Manual Edits.','info');
+  }
+
+  function promptAddCol(){
+    document.getElementById('newColName').value='';
+    document.getElementById('newColVal').value='';
+    document.getElementById('addColModal').style.display='flex';
+  }
+
+  function closeModal(){
+    document.getElementById('addColModal').style.display='none';
+  }
+
+  function confirmAddCol(){
+    const name = document.getElementById('newColName').value.trim();
+    const val  = document.getElementById('newColVal').value.trim();
+    if(!name){ showMsg('Column name required.','error'); return; }
+    closeModal();
+    showLoader('Adding column...');
+    fetch('/editor/manual_edit', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({edits:[], add_column: val||'', new_column_name: name})
+    }).then(r=>r.json()).then(d=>{
+      hideLoader();
+      if(d.error){ showMsg(d.error,'error'); return; }
+      tableData=d; renderTable(); updateStatus();
+      showMsg('✅ Column "'+name+'" added!','success');
+    }).catch(()=>{ hideLoader(); showMsg('Failed to add column.','error'); });
+  }
+
+  function deleteCol(col){
+    if(!confirm('Delete column "'+col+'"? This cannot be undone without Undo.')) return;
+    showLoader('Deleting column...');
+    fetch('/editor/manual_edit', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({edits:[], delete_cols:[col]})
+    }).then(r=>r.json()).then(d=>{
+      hideLoader();
+      if(d.error){ showMsg(d.error,'error'); return; }
+      tableData=d; renderTable(); updateStatus();
+      showMsg('✅ Column "'+col+'" deleted.','success');
+    }).catch(()=>{ hideLoader(); showMsg('Failed.','error'); });
+  }
+
+  function renameCol(inp){
+    const oldName = inp.dataset.orig;
+    const newName = inp.value.trim();
+    if(!newName || newName === oldName) return;
+    showLoader('Renaming column...');
+    fetch('/editor/manual_edit', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({edits:[], rename:{[oldName]: newName}})
+    }).then(r=>r.json()).then(d=>{
+      hideLoader();
+      if(d.error){ showMsg(d.error,'error'); inp.value=oldName; return; }
+      tableData=d; renderTable(); updateStatus();
+      showMsg('✅ Renamed "'+oldName+'" → "'+newName+'"','success');
+    }).catch(()=>{ hideLoader(); showMsg('Rename failed.','error'); inp.value=oldName; });
+  }
+
+  function toggleAllRows(cb){
+    document.querySelectorAll('.row-select').forEach(r=>{
+      r.checked = cb.checked;
+      const ri = parseInt(r.dataset.row);
+      cb.checked ? selectedRows.add(ri) : selectedRows.delete(ri);
+    });
+  }
+
+  function toggleRowSelect(ri, checked){
+    checked ? selectedRows.add(ri) : selectedRows.delete(ri);
+  }
+
+  function deleteSelectedRows(){
+    if(!selectedRows.size){ showMsg('Select rows to delete first.','info'); return; }
+    if(!confirm('Delete '+selectedRows.size+' selected row(s)?')) return;
+    showLoader('Deleting rows...');
+    fetch('/editor/manual_edit', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({edits:[], delete_rows:[...selectedRows]})
+    }).then(r=>r.json()).then(d=>{
+      hideLoader();
+      if(d.error){ showMsg(d.error,'error'); return; }
+      tableData=d; renderTable(); updateStatus();
+      showMsg('✅ '+selectedRows.size+' row(s) deleted.','success');
+      selectedRows.clear();
+    }).catch(()=>{ hideLoader(); showMsg('Failed.','error'); });
+  }
+
+  function undoEdit(){
+    showLoader('Undoing...');
+    fetch('/editor/undo', {method:'POST'}).then(r=>r.json()).then(d=>{
+      hideLoader();
+      if(d.error){ showMsg(d.error,'error'); return; }
+      tableData=d; renderTable(); updateStatus();
+      showMsg('↩️ Undo successful.','success');
+    }).catch(()=>{ hideLoader(); showMsg('Undo failed.','error'); });
+  }
+
+  function downloadCSV(){
+    if(!tableData.rows.length){ showMsg('No data to download.','error'); return; }
+    window.location.href = '/editor/download';
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function updateStatus(){
+    const s = tableData;
+    document.getElementById('statusBar').innerHTML=`
+      <div class="status-tag">📋 <span class="status-val">${(s.shape||[s.rows.length,s.columns.length])[0].toLocaleString()}</span> rows</div>
+      <div class="status-tag">📊 <span class="status-val">${s.columns.length}</span> columns</div>
+      <div class="status-tag">Columns: <span class="status-val">${s.columns.slice(0,4).join(', ')}${s.columns.length>4?'...':''}</span></div>`;
+  }
+
+  function showLoader(msg='Processing...'){
+    document.getElementById('editorLoader').style.display='block';
+    document.getElementById('editorLoader').querySelector('div:last-child').textContent=msg;
+    document.getElementById('tableWrap').style.display='none';
+  }
+
+  function hideLoader(){
+    document.getElementById('editorLoader').style.display='none';
+    if(tableData.rows.length) document.getElementById('tableWrap').style.display='block';
+  }
+
+  function showMsg(msg, type='info'){
+    const b = document.getElementById('msgBar');
+    b.className='msg-bar '+type;
+    b.textContent=msg;
+    b.style.display='block';
+    setTimeout(()=>{ b.style.display='none'; }, 6000);
+  }
+
+  function esc(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+{% endblock %}

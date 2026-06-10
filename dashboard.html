@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — Biz-Analyst{% endblock %}
+{% block head %}
+<style>
+  .dash-hero{background:linear-gradient(135deg,rgba(137,180,250,.08),rgba(203,166,247,.08));
+             border:1px solid var(--border);border-radius:20px;padding:32px;margin-bottom:28px;
+             display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+  .dash-avatar{width:64px;height:64px;border-radius:16px;
+               background:linear-gradient(135deg,var(--accent),var(--accent2));
+               display:flex;align-items:center;justify-content:center;
+               font-size:26px;font-weight:800;color:#0d0d1a;flex-shrink:0}
+  .dash-hero h1{font-size:22px;font-weight:800;margin-bottom:4px}
+  .dash-hero p{color:var(--subtext);font-size:14px}
+  .role-badge{display:inline-flex;align-items:center;gap:5px;
+              background:rgba(137,180,250,.12);border:1px solid rgba(137,180,250,.25);
+              color:var(--accent);font-size:11px;font-weight:700;padding:3px 10px;
+              border-radius:20px;margin-top:6px}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px}
+  .activity-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px}
+  .activity-card h3{font-size:15px;font-weight:700;margin-bottom:16px;color:var(--subtext);
+                    text-transform:uppercase;letter-spacing:.6px;font-size:12px}
+  .activity-empty{text-align:center;padding:32px;color:var(--muted);font-size:14px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page">
+
+  <div class="dash-hero">
+    <div class="dash-avatar">{{ current_user.username[0].upper() }}</div>
+    <div>
+      <h1>Welcome back, {{ current_user.username }}!</h1>
+      <p>{{ current_user.email }}</p>
+      <div class="role-badge">
+        {% if current_user.role == 'admin' %}🛡️ Administrator{% else %}👤 User{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Analyses</div>
+      <div class="stat-value">{{ current_user.analyses_count }}</div>
+      <div class="stat-sub">files analysed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Account Type</div>
+      <div class="stat-value" style="font-size:18px">{{ current_user.role.title() }}</div>
+      <div class="stat-sub">{% if current_user.role=='admin' %}full access{% else %}standard access{% endif %}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Current Theme</div>
+      <div class="stat-value" style="font-size:18px">{{ current_user.theme.title() }}</div>
+      <div class="stat-sub"><a href="{{ url_for('settings') }}" style="color:var(--accent);text-decoration:none">change theme</a></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Member Since</div>
+      <div class="stat-value" style="font-size:16px">{{ current_user.created_at.strftime('%b %Y') }}</div>
+      <div class="stat-sub">{{ current_user.created_at.strftime('%d %b %Y') }}</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a class="btn btn-primary" href="{{ url_for('analyse') }}">🚀 New Analysis</a>
+    <a class="btn btn-ghost"   href="{{ url_for('settings') }}">⚙️ Settings & Theme</a>
+    {% if current_user.role=='admin' %}
+    <a class="btn btn-ghost"   href="{{ url_for('admin') }}">🛡️ Admin Panel</a>
+    {% endif %}
+  </div>
+
+  <div class="sec-title"><div class="sec-dot"></div> Recent Activity</div>
+  <div class="activity-card">
+    <div class="activity-empty">
+      📂 No analyses yet. <a href="{{ url_for('analyse') }}" style="color:var(--accent);text-decoration:none">Upload a file to get started →</a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,463 @@
+{% extends 'base.html' %}
+{% block title %}Analyse — Biz-Analyst{% endblock %}
+{% block head %}
+<style>
+  /* Upload */
+  .upload-zone{max-width:660px;margin:0 auto 16px;border:2px dashed var(--border);
+               border-radius:20px;background:var(--card);padding:52px 36px;
+               text-align:center;cursor:pointer;transition:all .3s;position:relative}
+  .upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:rgba(137,180,250,.03)}
+  .upload-zone.drag{box-shadow:0 0 0 4px rgba(137,180,250,.1)}
+  .upload-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .upload-icon{width:76px;height:76px;background:linear-gradient(135deg,rgba(137,180,250,.15),rgba(203,166,247,.15));
+               border-radius:18px;display:flex;align-items:center;justify-content:center;
+               font-size:34px;margin:0 auto 18px}
+  .upload-zone h2{font-size:19px;font-weight:700;margin-bottom:8px}
+  .upload-zone p{color:var(--subtext);font-size:14px;margin-bottom:20px}
+  .fmts{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:16px}
+  .fmt{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+       font-size:10px;font-weight:600;padding:3px 9px;border-radius:5px}
+
+  /* Loader */
+  #loader{display:none;text-align:center;padding:80px 24px}
+  .loader-text{color:var(--subtext);font-size:15px;margin-top:4px}
+  .loader-sub{color:var(--muted);font-size:13px;margin-top:6px}
+
+  /* Questionnaire */
+  #questionnaire{display:none}
+  .quest-card{max-width:740px;margin:0 auto;background:var(--card);
+              border:1px solid var(--border);border-radius:20px;overflow:hidden}
+  .quest-head{background:linear-gradient(135deg,rgba(137,180,250,.08),rgba(203,166,247,.08));
+              border-bottom:1px solid var(--border);padding:24px 28px}
+  .quest-head h2{font-size:18px;font-weight:700;margin-bottom:4px}
+  .quest-head p{color:var(--subtext);font-size:13px}
+  .quest-body{padding:28px}
+  .q-label{font-size:12px;font-weight:600;color:var(--subtext);text-transform:uppercase;
+            letter-spacing:.6px;margin-bottom:10px}
+  .q-opts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+  .q-opt{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+         font-size:13px;padding:8px 16px;border-radius:9px;cursor:pointer;transition:all .2s}
+  .q-opt:hover,.q-opt.sel{background:rgba(137,180,250,.12);border-color:var(--accent);color:var(--accent)}
+  .q-ta{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+        padding:12px 16px;color:var(--text);font-size:14px;font-family:'Inter',sans-serif;
+        resize:vertical;min-height:88px;outline:none;transition:border-color .2s;margin-bottom:22px}
+  .q-ta:focus{border-color:var(--accent)}
+  .q-ta::placeholder{color:var(--muted)}
+  .col-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:22px}
+  .col-chip{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+            font-size:12px;padding:5px 12px;border-radius:7px;cursor:pointer;transition:all .2s}
+  .col-chip:hover,.col-chip.sel{background:rgba(203,166,247,.12);border-color:var(--accent2);color:var(--accent2)}
+  .quest-foot{padding:0 28px 28px;display:flex;gap:12px}
+
+  /* Results */
+  #results{display:none}
+  .results-bar{display:flex;align-items:center;justify-content:space-between;
+               margin-bottom:26px;flex-wrap:wrap;gap:12px}
+  .file-pill{display:inline-flex;align-items:center;gap:10px;background:var(--card);
+             border:1px solid var(--border);border-radius:12px;padding:10px 18px}
+  .ftype{background:linear-gradient(135deg,var(--accent),var(--accent2));
+         color:#0d0d1a;-webkit-text-fill-color:#0d0d1a;font-size:10px;font-weight:800;
+         padding:3px 8px;border-radius:5px}
+  .res-right{display:flex;align-items:center;gap:10px}
+  .ai-badge{display:flex;align-items:center;gap:6px;background:var(--card);
+            border:1px solid var(--border);border-radius:8px;padding:6px 12px;
+            font-size:12px;font-weight:600;color:var(--subtext)}
+  .ai-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px}
+  @media(max-width:768px){.g2{grid-template-columns:1fr}}
+  .card-title{font-size:11px;font-weight:600;color:var(--subtext);text-transform:uppercase;
+              letter-spacing:.7px;margin-bottom:14px}
+  .ov-row{display:flex;justify-content:space-between;padding:9px 0;
+          border-bottom:1px solid var(--surface);font-size:13px}
+  .ov-row:last-child{border-bottom:none}
+  .insight{background:var(--surface);border-left:3px solid var(--accent);border-radius:8px;
+           padding:9px 13px;margin-bottom:7px;font-size:13px;line-height:1.6}
+
+  /* AI report */
+  .ai-report{background:var(--card);border:1px solid var(--border);border-radius:16px;margin-bottom:24px;overflow:hidden}
+  .ai-report-head{background:linear-gradient(135deg,rgba(137,180,250,.08),rgba(203,166,247,.08));
+                  border-bottom:1px solid var(--border);padding:18px 24px;
+                  display:flex;align-items:center;gap:12px}
+  .ai-ic{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+         border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .ai-body{padding:24px;font-size:14px;line-height:1.85;max-height:520px;overflow-y:auto}
+
+  /* Charts */
+  .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:18px;margin-bottom:24px}
+  @media(max-width:560px){.charts-grid{grid-template-columns:1fr}}
+  .chart-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;transition:border-color .2s}
+  .chart-card:hover{border-color:var(--accent)}
+  .chart-title{font-size:12px;font-weight:600;color:var(--subtext);margin-bottom:12px}
+
+  /* Chat */
+  .chat-box{background:var(--card);border:1px solid var(--border);border-radius:16px;margin-bottom:40px;overflow:hidden}
+  .chat-head{padding:16px 22px;border-bottom:1px solid var(--border);
+             display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  .chat-msgs{padding:18px 22px;min-height:130px;max-height:360px;overflow-y:auto}
+  .msg{margin-bottom:14px;display:flex;gap:10px;align-items:flex-start}
+  .msg-av{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;
+          justify-content:center;font-size:13px;flex-shrink:0}
+  .msg.user .msg-av{background:rgba(137,180,250,.15)}
+  .msg.ai .msg-av{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+  .msg-bub{background:var(--surface);border-radius:10px;padding:10px 14px;
+           font-size:13px;line-height:1.65;max-width:calc(100% - 44px)}
+  .msg.user .msg-bub{background:rgba(137,180,250,.1);border:1px solid rgba(137,180,250,.2)}
+  .chat-in-row{display:flex;gap:10px;padding:14px 22px;border-top:1px solid var(--border)}
+  .chat-in{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+           padding:10px 15px;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;
+           outline:none;transition:border-color .2s}
+  .chat-in:focus{border-color:var(--accent)}
+  .chat-in::placeholder{color:var(--muted)}
+  .btn-send{background:linear-gradient(135deg,var(--accent),var(--accent2));
+            color:#0d0d1a;-webkit-text-fill-color:#0d0d1a;border:none;
+            border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;
+            cursor:pointer;transition:opacity .2s}
+  .btn-send:hover{opacity:.85}
+  .cp-btn{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+          font-size:11px;font-weight:600;padding:5px 11px;border-radius:7px;cursor:pointer;transition:all .2s}
+  .cp-btn:hover,.cp-btn.active{background:rgba(137,180,250,.12);border-color:var(--accent);color:var(--accent)}
+  .cp-btn.locked{opacity:.3;cursor:default}
+
+  /* Error */
+  .err-bar{display:none;background:rgba(243,139,168,.1);border:1px solid rgba(243,139,168,.3);
+           border-radius:12px;padding:14px 18px;margin:14px 0;color:#f38ba8;font-size:14px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page">
+
+<!-- UPLOAD -->
+<div id="uploadSection">
+  <div style="text-align:center;margin-bottom:24px">
+    <div class="sec-title" style="justify-content:center"><div class="sec-dot"></div> Analyse Your Data</div>
+    <p style="color:var(--subtext);font-size:14px">Upload any file and get AI-powered analysis, charts and insights</p>
+  </div>
+  <div class="upload-zone" id="dropZone">
+    <input type="file" id="fileInput"
+      accept=".csv,.xlsx,.xls,.ods,.pdf,.docx,.doc,.pptx,.ppt,.json,.xml,.yaml,.yml,.db,.sqlite,.txt,.rtf,.log,.md,.html,.htm"/>
+    <div class="upload-icon">📂</div>
+    <h2>Drop your file here</h2>
+    <p>Supports 20+ formats — drag & drop or click to browse</p>
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click();event.stopPropagation()">
+      📎 Choose File
+    </button>
+    <div class="fmts">
+      {% for f in ['CSV','Excel','PDF','Word','PowerPoint','JSON','XML','TXT','SQLite','HTML','YAML','LOG'] %}
+      <span class="fmt">{{ f }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="err-bar" id="errBar"></div>
+</div>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="spinner"></div>
+  <div class="loader-text" id="loaderTxt">Reading your file...</div>
+  <div class="loader-sub"  id="loaderSub">Detecting structure</div>
+</div>
+
+<!-- QUESTIONNAIRE -->
+<div id="questionnaire">
+  <div class="quest-card">
+    <div class="quest-head">
+      <h2>🎯 What would you like to analyse?</h2>
+      <p id="questInfo">Tell us what insights you need</p>
+    </div>
+    <div class="quest-body">
+      <div class="q-label">Type of Analysis</div>
+      <div class="q-opts" id="qOpts">
+        {% for opt in ['📋 General Overview','💰 Sales & Revenue','📈 Trend Analysis',
+                       '🏆 Comparison & Ranking','📉 Distribution & Spread',
+                       '🔗 Correlation & Relationships','🏦 Financial Analysis',
+                       '👥 Customer & Market','⚡ Performance Metrics','⚠️ Risk & Anomalies'] %}
+        <span class="q-opt {% if loop.first %}sel{% endif %}"
+              data-v="{{ opt.split(' ',1)[1] }}">{{ opt }}</span>
+        {% endfor %}
+      </div>
+      <div class="q-label">Your Questions <span style="color:var(--muted);font-weight:400;text-transform:none">(optional)</span></div>
+      <textarea class="q-ta" id="qText"
+        placeholder="e.g. What are the top 5 products by revenue?&#10;Which region is growing fastest?&#10;Are there any unusual patterns?"></textarea>
+      <div class="q-label">Focus Columns <span style="color:var(--muted);font-weight:400;text-transform:none">(optional)</span></div>
+      <div class="col-chips" id="colChips"></div>
+    </div>
+    <div class="quest-foot">
+      <button class="btn btn-primary" onclick="runAnalysis()" style="flex:1">🚀 Run Analysis</button>
+      <button class="btn btn-ghost"   onclick="resetPage()">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS -->
+<div id="results">
+  <div class="results-bar">
+    <div class="file-pill">
+      <span class="ftype" id="rType">CSV</span>
+      <div>
+        <div style="font-size:14px;font-weight:600" id="rName">—</div>
+        <div style="font-size:12px;color:var(--subtext)" id="rMeta">—</div>
+      </div>
+    </div>
+    <div class="res-right">
+      <div class="ai-badge"><span class="ai-dot"></span><span id="rAiBadge">AI</span></div>
+      <button class="btn btn-ghost btn-sm" onclick="resetPage()">← New Analysis</button>
+    </div>
+  </div>
+
+  <div class="stat-grid"  id="statGrid"></div>
+
+  <div class="g2">
+    <div class="card"><div class="card-title">📋 Overview</div><div id="overview"></div></div>
+    <div class="card"><div class="card-title">💡 Insights</div><div id="insights"></div></div>
+  </div>
+
+  <div class="sec-title"><div class="sec-dot"></div> AI Analysis Report</div>
+  <div class="ai-report">
+    <div class="ai-report-head">
+      <div class="ai-ic">🤖</div>
+      <div>
+        <div style="font-size:15px;font-weight:700" id="aiTitle">AI Report</div>
+        <div style="font-size:12px;color:var(--subtext)" id="aiSub">Powered by AI</div>
+      </div>
+    </div>
+    <div class="ai-body" id="aiBody"></div>
+  </div>
+
+  <div class="sec-title"><div class="sec-dot"></div> Charts & Visualisations</div>
+  <div class="charts-grid" id="chartsGrid"></div>
+
+  <div class="sec-title"><div class="sec-dot"></div> Data Preview</div>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:24px">
+    <div class="tbl-wrap"><table id="prevTable"></table></div>
+  </div>
+
+  <div class="sec-title"><div class="sec-dot"></div> Ask AI About Your Data</div>
+  <div class="chat-box">
+    <div class="chat-head">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="ai-ic">💬</div>
+        <div>
+          <div style="font-size:14px;font-weight:700">Data Chat</div>
+          <div style="font-size:12px;color:var(--subtext)">Ask anything about your data</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap" id="chatProv">
+        <button class="cp-btn" data-p="gemini"   onclick="setChatProv('gemini')">Gemini</button>
+        <button class="cp-btn" data-p="chatgpt"  onclick="setChatProv('chatgpt')">ChatGPT</button>
+        <button class="cp-btn" data-p="claude"   onclick="setChatProv('claude')">Claude</button>
+        <button class="cp-btn" data-p="deepseek" onclick="setChatProv('deepseek')">DeepSeek</button>
+      </div>
+    </div>
+    <div class="chat-msgs" id="chatMsgs">
+      <div class="msg ai">
+        <div class="msg-av">🤖</div>
+        <div class="msg-bub">Hi! I've analysed your data. Ask me anything — trends, comparisons, recommendations, anything at all.</div>
+      </div>
+    </div>
+    <div class="chat-in-row">
+      <input class="chat-in" id="chatIn" placeholder="e.g. What are the top trends? Any outliers?"
+             onkeydown="if(event.key==='Enter')sendChat()"/>
+      <button class="btn-send" onclick="sendChat()">Send ↑</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /page -->
+{% endblock %}
+{% block scripts %}
+<script>
+  let curFile=null, dataCtx='';
+
+  const PLABELS={gemini:'🟢 Gemini',chatgpt:'🟡 ChatGPT',claude:'🟣 Claude',deepseek:'🔵 DeepSeek'};
+
+  // Sync chat provider buttons with nav state
+  function syncChatBtns(){
+    document.querySelectorAll('.cp-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.p===chatProvider);
+      b.classList.toggle('locked', !providerStatus[b.dataset.p]);
+    });
+  }
+
+  function setChatProv(p){ chatProvider=p; syncChatBtns(); }
+
+  // Re-sync after providers load
+  const origFetch = window.fetch;
+  document.addEventListener('DOMContentLoaded', ()=>{
+    setTimeout(syncChatBtns, 600);
+  });
+
+  // File upload
+  const fi=document.getElementById('fileInput'), dz=document.getElementById('dropZone');
+  fi.addEventListener('change',()=>{ if(fi.files[0]) doUpload(fi.files[0]); });
+  dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', ()=>dz.classList.remove('drag'));
+  dz.addEventListener('drop', e=>{ e.preventDefault(); dz.classList.remove('drag');
+    if(e.dataTransfer.files[0]) doUpload(e.dataTransfer.files[0]); });
+
+  function doUpload(file){
+    curFile=file; hideErr();
+    show('loader'); hide('uploadSection'); hide('questionnaire'); hide('results');
+    setLoader('Reading your file...','Detecting data structure and columns');
+    const fd=new FormData(); fd.append('file',file);
+    fetch('/upload',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
+      hide('loader');
+      if(d.error){showErr(d.error);show('uploadSection');return;}
+      showQuest(d);
+    }).catch(()=>{ hide('loader'); showErr('Cannot reach server. Is Flask running?'); show('uploadSection'); });
+  }
+
+  function showQuest(d){
+    document.getElementById('questInfo').textContent=
+      `${d.filename} — ${d.rows.toLocaleString()} rows × ${d.columns} columns`;
+    const cc=document.getElementById('colChips'); cc.innerHTML='';
+    d.all_columns.forEach(col=>{
+      const c=document.createElement('span'); c.className='col-chip';
+      c.textContent=col; c.dataset.col=col;
+      c.onclick=()=>c.classList.toggle('sel'); cc.appendChild(c);
+    });
+    show('questionnaire');
+    document.getElementById('questionnaire').scrollIntoView({behavior:'smooth'});
+  }
+
+  document.querySelectorAll('.q-opt').forEach(o=>o.addEventListener('click',()=>{
+    document.querySelectorAll('.q-opt').forEach(x=>x.classList.remove('sel'));
+    o.classList.add('sel');
+  }));
+
+  function runAnalysis(){
+    const atype=document.querySelector('.q-opt.sel')?.dataset.v||'General Overview';
+    const raw=document.getElementById('qText').value.trim();
+    const questions=raw?raw.split('\n').map(q=>q.trim()).filter(Boolean):[];
+    const columns=[...document.querySelectorAll('.col-chip.sel')].map(c=>c.dataset.col);
+    hide('questionnaire'); show('loader');
+    setLoader('Running AI analysis...', `Using ${PLABELS[currentProvider]||'AI'} · Building charts`);
+    fetch('/analyse_data',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({analysis_type:atype,questions,columns,
+                           filename:curFile?.name||'data',provider:currentProvider})
+    }).then(r=>r.json()).then(d=>{
+      hide('loader');
+      if(d.error){showErr(d.error);show('questionnaire');return;}
+      renderResults(d);
+    }).catch(()=>{hide('loader');showErr('Analysis failed. Check Flask logs.');show('questionnaire');});
+  }
+
+  function renderResults(d){
+    const s=d.summary;
+    document.getElementById('rType').textContent=d.filename.split('.').pop().toUpperCase();
+    document.getElementById('rName').textContent=d.filename;
+    document.getElementById('rMeta').textContent=`${s.rows.toLocaleString()} rows · ${s.columns} columns · ${d.analysis_type}`;
+    document.getElementById('rAiBadge').textContent=PLABELS[d.provider]||'AI';
+    document.getElementById('aiTitle').textContent=`AI Analysis — ${d.analysis_type}`;
+    document.getElementById('aiSub').textContent=`Powered by ${PLABELS[d.provider]||'AI'}`;
+    dataCtx=`File:${d.filename}, Rows:${s.rows}, Cols:${s.columns}, Columns:${s.column_names.join(',')}`;
+
+    // Stat cards
+    const sg=document.getElementById('statGrid'); sg.innerHTML='';
+    [{label:'Rows',value:s.rows.toLocaleString(),sub:'total records',color:'var(--accent)'},
+     {label:'Columns',value:s.columns,sub:'data fields',color:'var(--accent2)'},
+     {label:'Missing',value:s.total_missing===0?'0':s.total_missing,
+      sub:s.total_missing===0?'✅ Clean':'⚠️ review needed',
+      color:s.total_missing===0?'var(--green)':'var(--red)'},
+     {label:'Numeric Fields',value:s.numeric_columns.length,sub:s.numeric_columns.slice(0,2).join(', ')||'—',color:'var(--accent)'},
+     ...s.stat_cards
+    ].forEach(c=>{
+      const el=document.createElement('div'); el.className='stat-card';
+      el.innerHTML=`<div class="stat-label">${c.label}</div>
+        <div class="stat-value" style="color:${c.color||'var(--accent)'}">${c.value||c.total||'—'}</div>
+        <div class="stat-sub">${c.avg?`avg: ${c.avg}`:c.sub||''}</div>`;
+      sg.appendChild(el);
+    });
+
+    // Overview
+    document.getElementById('overview').innerHTML=`
+      <div class="ov-row"><span style="color:var(--subtext)">Rows</span><span style="font-weight:700">${s.rows.toLocaleString()}</span></div>
+      <div class="ov-row"><span style="color:var(--subtext)">Columns</span><span style="font-weight:700">${s.columns}</span></div>
+      <div class="ov-row"><span style="color:var(--subtext)">Numeric</span><span style="font-weight:700">${s.numeric_columns.join(', ')||'None'}</span></div>
+      <div class="ov-row"><span style="color:var(--subtext)">Categorical</span><span style="font-weight:700">${s.categorical_columns.join(', ')||'None'}</span></div>
+      <div class="ov-row"><span style="color:var(--subtext)">Missing</span><span style="font-weight:700">${Object.keys(s.missing_values).length===0?'✅ None':Object.keys(s.missing_values).join(', ')}</span></div>
+      <div class="ov-row"><span style="color:var(--subtext)">Analysis</span><span style="font-weight:700">${d.analysis_type}</span></div>`;
+
+    // Insights
+    const ins=document.getElementById('insights'); ins.innerHTML='';
+    const iList=[
+      `Dataset: ${s.rows.toLocaleString()} rows × ${s.columns} columns.`,
+      s.numeric_columns.length?`Numeric: ${s.numeric_columns.slice(0,4).join(', ')}.`:null,
+      s.categorical_columns.length?`Categories: ${s.categorical_columns.slice(0,3).join(', ')}.`:null,
+      s.total_missing===0?'✅ No missing values.':'⚠️ '+s.total_missing+' missing values found.',
+      ...s.stat_cards.map(c=>`${c.label}: total ${c.total}, avg ${c.avg}`)
+    ].filter(Boolean);
+    iList.forEach(i=>{const el=document.createElement('div');el.className='insight';el.textContent=i;ins.appendChild(el);});
+
+    // AI body
+    document.getElementById('aiBody').innerHTML=renderMD(d.ai_analysis||'No analysis available.');
+
+    // Charts
+    const cg=document.getElementById('chartsGrid'); cg.innerHTML='';
+    d.charts.forEach((ch,i)=>{
+      const div=document.createElement('div'); div.className='chart-card';
+      div.innerHTML=`<div class="chart-title">${ch.icon||'📊'} ${ch.title}</div><div id="ch${i}"></div>`;
+      cg.appendChild(div);
+      Plotly.newPlot(`ch${i}`,ch.data.data,ch.data.layout,{responsive:true,displayModeBar:false});
+    });
+
+    // Table
+    const cols=d.columns, tbl=document.getElementById('prevTable');
+    tbl.innerHTML=`<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+      <tbody>${d.preview.map(row=>`<tr>${cols.map(c=>`<td>${row[c]!==undefined?row[c]:''}</td>`).join('')}</tr>`).join('')}</tbody>`;
+
+    syncChatBtns();
+    show('results');
+    document.getElementById('results').scrollIntoView({behavior:'smooth'});
+  }
+
+  // Chat
+  function sendChat(){
+    const inp=document.getElementById('chatIn'), q=inp.value.trim();
+    if(!q)return; inp.value='';
+    const msgs=document.getElementById('chatMsgs');
+    msgs.innerHTML+=`<div class="msg user"><div class="msg-av">👤</div><div class="msg-bub">${esc(q)}</div></div>`;
+    const tid='ty'+Date.now();
+    msgs.innerHTML+=`<div class="msg ai" id="${tid}"><div class="msg-av">🤖</div><div class="msg-bub typing"><span></span><span></span><span></span></div></div>`;
+    msgs.scrollTop=msgs.scrollHeight;
+    fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({question:q,context:dataCtx,provider:chatProvider})
+    }).then(r=>r.json()).then(data=>{
+      document.getElementById(tid)?.remove();
+      msgs.innerHTML+=`<div class="msg ai"><div class="msg-av">🤖</div><div class="msg-bub">${renderMD(data.answer)}</div></div>`;
+      msgs.scrollTop=msgs.scrollHeight;
+    }).catch(()=>{
+      document.getElementById(tid)?.remove();
+      msgs.innerHTML+=`<div class="msg ai"><div class="msg-av">🤖</div><div class="msg-bub" style="color:var(--red)">Connection error.</div></div>`;
+      msgs.scrollTop=msgs.scrollHeight;
+    });
+  }
+
+  function renderMD(t){
+    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--accent)">$1</strong>')
+      .replace(/^## (.+)$/gm,'<h3 style="color:var(--accent2);margin:14px 0 7px;font-size:14px;font-weight:700">$1</h3>')
+      .replace(/^# (.+)$/gm,'<h2 style="color:var(--accent);margin:16px 0 8px;font-size:16px;font-weight:800">$1</h2>')
+      .replace(/^- (.+)$/gm,'<div style="display:flex;gap:8px;margin:3px 0"><span style="color:var(--accent);flex-shrink:0">•</span><span>$1</span></div>')
+      .replace(/\n/g,'<br/>');
+  }
+
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function show(id){document.getElementById(id).style.display='block';}
+  function hide(id){document.getElementById(id).style.display='none';}
+  function setLoader(t,s){document.getElementById('loaderTxt').textContent=t;document.getElementById('loaderSub').textContent=s;}
+  function showErr(m){const b=document.getElementById('errBar');b.style.display='block';b.textContent='⚠️ '+m;}
+  function hideErr(){document.getElementById('errBar').style.display='none';}
+
+  function resetPage(){
+    ['results','questionnaire','loader'].forEach(hide);
+    show('uploadSection');
+    document.getElementById('fileInput').value='';
+    document.getElementById('qText').value='';
+    hideErr();
+    document.getElementById('chatMsgs').innerHTML=`<div class="msg ai"><div class="msg-av">🤖</div><div class="msg-bub">Hi! I've analysed your data. Ask me anything.</div></div>`;
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block title %}Admin Panel — Biz-Analyst{% endblock %}
+{% block head %}
+<style>
+  .admin-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px}
+  .role-pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+  .role-admin{background:rgba(203,166,247,.15);color:#cba6f7;border:1px solid rgba(203,166,247,.3)}
+  .role-user{background:rgba(137,180,250,.1);color:#89b4fa;border:1px solid rgba(137,180,250,.2)}
+  .search-bar{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+              padding:10px 15px;color:var(--text);font-size:14px;font-family:'Inter',sans-serif;
+              outline:none;width:100%;max-width:320px;transition:border-color .2s;margin-bottom:16px}
+  .search-bar:focus{border-color:var(--accent)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page">
+
+  {% if current_user.role != 'admin' %}
+  <div style="text-align:center;padding:80px 24px">
+    <div style="font-size:48px;margin-bottom:16px">🚫</div>
+    <h2 style="margin-bottom:10px">Access Denied</h2>
+    <p style="color:var(--subtext)">You need admin privileges to view this page.</p>
+  </div>
+  {% else %}
+
+  <div class="sec-title" style="margin-bottom:24px"><div class="sec-dot"></div> Admin Panel</div>
+
+  <!-- Stats -->
+  <div class="admin-stats">
+    <div class="stat-card">
+      <div class="stat-label">Total Users</div>
+      <div class="stat-value">{{ users|length }}</div>
+      <div class="stat-sub">registered accounts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Analyses</div>
+      <div class="stat-value">{{ total_analyses }}</div>
+      <div class="stat-sub">across all users</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Admin Users</div>
+      <div class="stat-value">{{ users|selectattr('role','equalto','admin')|list|length }}</div>
+      <div class="stat-sub">with full access</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Regular Users</div>
+      <div class="stat-value">{{ users|selectattr('role','equalto','user')|list|length }}</div>
+      <div class="stat-sub">standard accounts</div>
+    </div>
+  </div>
+
+  <!-- Users table -->
+  <div class="sec-title"><div class="sec-dot"></div> All Users</div>
+  <input class="search-bar" type="text" id="userSearch" placeholder="🔍 Search users..." oninput="filterUsers()"/>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="tbl-wrap">
+      <table id="usersTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Theme</th>
+            <th>Analyses</th>
+            <th>Joined</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr class="user-row">
+            <td style="color:var(--muted)">{{ u.id }}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:7px;
+                            background:linear-gradient(135deg,var(--accent),var(--accent2));
+                            display:flex;align-items:center;justify-content:center;
+                            font-size:11px;font-weight:800;color:#0d0d1a;flex-shrink:0">
+                  {{ u.username[0].upper() }}
+                </div>
+                <span style="font-weight:600">{{ u.username }}</span>
+              </div>
+            </td>
+            <td style="color:var(--subtext)">{{ u.email }}</td>
+            <td>
+              <span class="role-pill {% if u.role=='admin' %}role-admin{% else %}role-user{% endif %}">
+                {% if u.role=='admin' %}🛡️ Admin{% else %}👤 User{% endif %}
+              </span>
+            </td>
+            <td style="color:var(--subtext)">{{ u.theme.title() }}</td>
+            <td style="font-weight:600;color:var(--accent)">{{ u.analyses_count }}</td>
+            <td style="color:var(--subtext)">{{ u.created_at.strftime('%d %b %Y') }}</td>
+            <td>
+              {% if u.role != 'admin' %}
+              <form method="POST" action="{{ url_for('delete_user', uid=u.id) }}"
+                    onsubmit="return confirm('Delete {{ u.username }}? This cannot be undone.')">
+                <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+              </form>
+              {% else %}
+              <span style="color:var(--muted);font-size:12px">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  function filterUsers(){
+    const q=document.getElementById('userSearch').value.toLowerCase();
+    document.querySelectorAll('.user-row').forEach(row=>{
+      row.style.display=row.textContent.toLowerCase().includes(q)?'':'none';
+    });
+  }
+</script>
+{% endblock %}

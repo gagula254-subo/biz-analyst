@@ -1,0 +1,411 @@
+{% extends 'base.html' %}
+{% block title %}My AI — Biz-Analyst{% endblock %}
+{% block head %}
+<style>
+  .ai-layout{display:grid;grid-template-columns:380px 1fr;gap:22px;align-items:start}
+  @media(max-width:960px){.ai-layout{grid-template-columns:1fr}}
+
+  /* Builder card */
+  .builder-card{background:var(--card);border:1px solid var(--border);border-radius:18px;overflow:hidden;position:sticky;top:80px}
+  .builder-head{background:linear-gradient(135deg,rgba(137,180,250,.1),rgba(203,166,247,.1));
+                border-bottom:1px solid var(--border);padding:22px 24px;display:flex;align-items:center;gap:14px}
+  .ai-avatar-big{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+                 display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
+  .builder-body{padding:24px}
+
+  /* Avatar emoji picker */
+  .avatar-grid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+  .av-opt{width:36px;height:36px;border-radius:9px;border:2px solid var(--border);
+          display:flex;align-items:center;justify-content:center;font-size:18px;
+          cursor:pointer;transition:all .2s;background:var(--surface)}
+  .av-opt:hover,.av-opt.sel{border-color:var(--accent);background:rgba(137,180,250,.12)}
+
+  /* Tone selector */
+  .tone-grid{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:4px}
+  .tone-opt{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+            font-size:12px;padding:6px 13px;border-radius:8px;cursor:pointer;transition:all .2s}
+  .tone-opt:hover,.tone-opt.sel{background:rgba(137,180,250,.12);border-color:var(--accent);color:var(--accent)}
+
+  /* Provider picker */
+  .prov-grid{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:4px}
+  .prov-opt{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+            font-size:12px;padding:6px 13px;border-radius:8px;cursor:pointer;transition:all .2s}
+  .prov-opt:hover,.prov-opt.sel{background:rgba(137,180,250,.12);border-color:var(--accent);color:var(--accent)}
+  .prov-opt.locked{opacity:.3;cursor:default}
+
+  /* Chat section */
+  .chat-card{background:var(--card);border:1px solid var(--border);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;height:700px}
+  .chat-top{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px}
+  .chat-ai-av{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+              display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+  .chat-status{width:8px;height:8px;border-radius:50%;background:var(--green);margin-left:auto}
+
+  .chat-msgs{flex:1;overflow-y:auto;padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+  .chat-msgs::-webkit-scrollbar{width:4px}
+  .chat-msgs::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+  .msg{display:flex;gap:10px;align-items:flex-start;max-width:85%}
+  .msg.user{align-self:flex-end;flex-direction:row-reverse}
+  .msg-av{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;
+          justify-content:center;font-size:14px;flex-shrink:0}
+  .msg.ai .msg-av{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+  .msg.user .msg-av{background:rgba(137,180,250,.2)}
+  .msg-bub{padding:11px 15px;border-radius:12px;font-size:14px;line-height:1.65}
+  .msg.ai .msg-bub{background:var(--surface);border:1px solid var(--border);border-top-left-radius:4px}
+  .msg.user .msg-bub{background:linear-gradient(135deg,rgba(137,180,250,.15),rgba(203,166,247,.15));
+                     border:1px solid rgba(137,180,250,.2);border-top-right-radius:4px}
+  .msg-time{font-size:10px;color:var(--muted);margin-top:4px}
+
+  .chat-bottom{padding:14px 18px;border-top:1px solid var(--border);display:flex;gap:10px}
+  .chat-in{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+           padding:11px 16px;color:var(--text);font-size:14px;font-family:'Inter',sans-serif;
+           outline:none;transition:border-color .2s;resize:none;max-height:120px;overflow-y:auto}
+  .chat-in:focus{border-color:var(--accent)}
+  .chat-in::placeholder{color:var(--muted)}
+  .btn-chat-send{background:linear-gradient(135deg,var(--accent),var(--accent2));
+                 color:#0d0d1a;-webkit-text-fill-color:#0d0d1a;border:none;
+                 border-radius:12px;padding:11px 18px;font-size:14px;font-weight:700;
+                 cursor:pointer;transition:opacity .2s;flex-shrink:0}
+  .btn-chat-send:hover{opacity:.85}
+
+  /* Suggestions */
+  .suggest-row{display:flex;flex-wrap:wrap;gap:7px;padding:0 18px 12px}
+  .suggest{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+           font-size:12px;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all .2s}
+  .suggest:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* Knowledge section */
+  .know-section{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
+  .know-preview{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+                padding:12px;font-size:12px;color:var(--subtext);max-height:100px;
+                overflow-y:auto;margin-top:8px;font-family:monospace;line-height:1.5}
+
+  /* Status badge */
+  .ai-status{display:inline-flex;align-items:center;gap:5px;font-size:11px;
+             font-weight:600;padding:3px 10px;border-radius:20px}
+  .ai-status.ready{background:rgba(166,227,161,.12);color:var(--green);border:1px solid rgba(166,227,161,.3)}
+  .ai-status.setup{background:rgba(249,226,175,.12);color:var(--yellow);border:1px solid rgba(249,226,175,.3)}
+
+  .typing-ind{display:none;align-self:flex-start}
+  .typing-ind .msg-bub{background:var(--surface);border:1px solid var(--border);padding:12px 16px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page">
+
+  <div class="sec-title" style="margin-bottom:22px">
+    <div class="sec-dot"></div> My AI Assistant
+    <span style="font-size:13px;color:var(--subtext);font-weight:400">— Build and chat with your own AI</span>
+  </div>
+
+  <div class="ai-layout">
+
+    <!-- ── BUILDER ── -->
+    <div>
+      <div class="builder-card">
+        <div class="builder-head">
+          <div class="ai-avatar-big" id="previewAvatar">{{ ai.avatar if ai else '🤖' }}</div>
+          <div>
+            <div style="font-size:16px;font-weight:800" id="previewName">{{ ai.name if ai else 'My AI' }}</div>
+            <div style="font-size:12px;color:var(--subtext);margin-top:3px" id="previewExpertise">{{ ai.expertise if ai else 'data analysis' }}</div>
+            <div style="margin-top:6px">
+              {% if ai %}
+              <span class="ai-status ready">🟢 Ready</span>
+              {% else %}
+              <span class="ai-status setup">⚙️ Not configured yet</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="builder-body">
+          <form method="POST" action="{{ url_for('save_ai') }}" enctype="multipart/form-data">
+
+            <!-- Avatar -->
+            <div class="form-group">
+              <label class="form-label">Avatar Emoji</label>
+              <div class="avatar-grid">
+                {% for emoji in ['🤖','🧠','💡','📊','🔬','🎯','⚡','🦾','🌟','💎','🚀','🐉','👾','🦅','🔮','🏆'] %}
+                <div class="av-opt {% if ai and ai.avatar==emoji %}sel{% elif not ai and emoji=='🤖' %}sel{% endif %}"
+                     onclick="pickAvatar('{{ emoji }}', this)">{{ emoji }}</div>
+                {% endfor %}
+              </div>
+              <input type="hidden" name="avatar" id="avatarInput" value="{{ ai.avatar if ai else '🤖' }}"/>
+            </div>
+
+            <!-- Name -->
+            <div class="form-group">
+              <label class="form-label">AI Name</label>
+              <input class="form-input" type="text" name="name" id="aiNameInput"
+                     value="{{ ai.name if ai else '' }}" placeholder="e.g. BizBot, DataPro, Aria"
+                     oninput="document.getElementById('previewName').textContent=this.value||'My AI'"/>
+            </div>
+
+            <!-- Expertise -->
+            <div class="form-group">
+              <label class="form-label">Area of Expertise</label>
+              <input class="form-input" type="text" name="expertise"
+                     value="{{ ai.expertise if ai else '' }}"
+                     placeholder="e.g. sales data, financial analysis, marketing metrics"
+                     oninput="document.getElementById('previewExpertise').textContent=this.value||'general'"/>
+            </div>
+
+            <!-- Personality -->
+            <div class="form-group">
+              <label class="form-label">Personality & Role <span style="color:var(--muted);font-weight:400;text-transform:none">(optional)</span></label>
+              <textarea class="form-input" name="personality" rows="3"
+                style="resize:vertical"
+                placeholder="e.g. You are a senior data analyst with 10 years experience. You give concise, actionable insights and always back up your answers with numbers.">{{ ai.personality if ai else '' }}</textarea>
+            </div>
+
+            <!-- Tone -->
+            <div class="form-group">
+              <label class="form-label">Communication Tone</label>
+              <div class="tone-grid" id="toneGrid">
+                {% for t in [('professional','💼 Professional'),('friendly','😊 Friendly'),('casual','💬 Casual'),('expert','🎓 Expert'),('simple','📖 Simple')] %}
+                <span class="tone-opt {% if ai and ai.tone==t[0] %}sel{% elif not ai and t[0]=='professional' %}sel{% endif %}"
+                      data-v="{{ t[0] }}" onclick="pickTone('{{ t[0] }}',this)">{{ t[1] }}</span>
+                {% endfor %}
+              </div>
+              <input type="hidden" name="tone" id="toneInput" value="{{ ai.tone if ai else 'professional' }}"/>
+            </div>
+
+            <!-- Language -->
+            <div class="form-group">
+              <label class="form-label">Language</label>
+              <select class="form-input" name="language">
+                {% for lang in ['English','Spanish','French','German','Portuguese','Arabic','Chinese','Hindi','Japanese','Swahili'] %}
+                <option value="{{ lang }}" {% if ai and ai.language==lang %}selected{% endif %}>{{ lang }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Provider -->
+            <div class="form-group">
+              <label class="form-label">Powered By</label>
+              <div class="prov-grid" id="aiProvGrid">
+                {% for p,label in [('gemini','🟢 Gemini'),('chatgpt','🟡 ChatGPT'),('claude','🟣 Claude'),('deepseek','🔵 DeepSeek')] %}
+                <span class="prov-opt {% if ai and ai.provider==p %}sel{% elif not ai and p=='gemini' %}sel{% endif %}"
+                      data-v="{{ p }}" onclick="pickProv('{{ p }}',this)">{{ label }}</span>
+                {% endfor %}
+              </div>
+              <input type="hidden" name="provider" id="provInput" value="{{ ai.provider if ai else 'gemini' }}"/>
+            </div>
+
+            <!-- Knowledge base -->
+            <div class="form-group know-section">
+              <label class="form-label">📚 Knowledge Base <span style="color:var(--muted);font-weight:400;text-transform:none">(optional)</span></label>
+              <p style="font-size:12px;color:var(--subtext);margin-bottom:10px">Upload a document or paste text — your AI will use this knowledge to answer questions.</p>
+
+              <div style="border:2px dashed var(--border);border-radius:10px;padding:14px;text-align:center;margin-bottom:10px;position:relative;cursor:pointer"
+                   onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor=''">
+                <input type="file" name="knowledge_file" accept=".txt,.pdf,.docx,.md"
+                       style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%"/>
+                <div style="font-size:20px;margin-bottom:4px">📄</div>
+                <div style="font-size:12px;color:var(--subtext)">Upload TXT, PDF, or Word doc</div>
+              </div>
+
+              <textarea class="form-input" name="knowledge_text" rows="3"
+                style="resize:vertical;font-size:12px"
+                placeholder="Or paste knowledge here — FAQs, company info, product details, instructions..."></textarea>
+
+              {% if ai and ai.knowledge %}
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+                <span style="font-size:12px;color:var(--green)">✅ {{ ai.knowledge|length }} characters of knowledge loaded</span>
+                <form method="POST" action="{{ url_for('reset_ai_knowledge') }}" style="display:inline">
+                  <button class="btn btn-danger btn-sm" type="submit"
+                          onclick="return confirm('Clear knowledge base?')">Clear</button>
+                </form>
+              </div>
+              <div class="know-preview">{{ ai.knowledge[:400] }}{% if ai.knowledge|length > 400 %}...{% endif %}</div>
+              {% endif %}
+            </div>
+
+            <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;margin-top:8px">
+              💾 Save My AI
+            </button>
+
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CHAT ── -->
+    <div>
+      {% if ai %}
+      <div class="chat-card">
+        <div class="chat-top">
+          <div class="chat-ai-av">{{ ai.avatar }}</div>
+          <div>
+            <div style="font-size:15px;font-weight:700">{{ ai.name }}</div>
+            <div style="font-size:12px;color:var(--subtext)">{{ ai.expertise }} · {{ ai.tone }} · {{ ai.language }}</div>
+          </div>
+          <div class="chat-status" title="Online"></div>
+        </div>
+
+        <div class="chat-msgs" id="chatMsgs">
+          <!-- Welcome message -->
+          <div class="msg ai">
+            <div class="msg-av">{{ ai.avatar }}</div>
+            <div>
+              <div class="msg-bub">Hi! I'm <strong>{{ ai.name }}</strong>. I specialise in <strong>{{ ai.expertise }}</strong>.{% if ai.knowledge %} I've been loaded with your knowledge base and ready to answer specific questions.{% endif %} How can I help you today?</div>
+              <div class="msg-time">Just now</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick suggestions -->
+        <div class="suggest-row" id="suggestRow">
+          <span class="suggest" onclick="sendSuggest(this)">What can you help me with?</span>
+          <span class="suggest" onclick="sendSuggest(this)">Analyse my latest data</span>
+          <span class="suggest" onclick="sendSuggest(this)">Give me key insights</span>
+          <span class="suggest" onclick="sendSuggest(this)">What trends should I watch?</span>
+        </div>
+
+        <!-- Typing indicator (hidden) -->
+        <div class="msg ai typing-ind" id="typingInd">
+          <div class="msg-av">{{ ai.avatar }}</div>
+          <div class="msg-bub typing"><span></span><span></span><span></span></div>
+        </div>
+
+        <div class="chat-bottom">
+          <textarea class="chat-in" id="chatInput" rows="1"
+            placeholder="Ask {{ ai.name }} anything..."
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"
+            oninput="autoResize(this)"></textarea>
+          <button class="btn-chat-send" onclick="sendMsg()">Send ↑</button>
+        </div>
+      </div>
+
+      {% else %}
+      <!-- No AI created yet -->
+      <div style="text-align:center;padding:80px 24px;background:var(--card);border:1px solid var(--border);border-radius:18px">
+        <div style="font-size:64px;margin-bottom:20px">🤖</div>
+        <h2 style="font-size:22px;font-weight:800;margin-bottom:12px">Create Your AI</h2>
+        <p style="color:var(--subtext);font-size:15px;max-width:400px;margin:0 auto 28px;line-height:1.7">
+          Fill in the form on the left to build your own AI assistant. Give it a name, personality, expertise and knowledge base — then chat with it here.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px;max-width:300px;margin:0 auto;text-align:left">
+          <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:var(--subtext)">
+            <span style="font-size:20px">1️⃣</span> Choose a name and avatar
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:var(--subtext)">
+            <span style="font-size:20px">2️⃣</span> Set its expertise and personality
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:var(--subtext)">
+            <span style="font-size:20px">3️⃣</span> Upload knowledge (optional)
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;font-size:14px;color:var(--subtext)">
+            <span style="font-size:20px">4️⃣</span> Click Save and start chatting!
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  // ── Builder UI ──────────────────────────────────────────────────────────
+  function pickAvatar(emoji, el){
+    document.querySelectorAll('.av-opt').forEach(e=>e.classList.remove('sel'));
+    el.classList.add('sel');
+    document.getElementById('avatarInput').value = emoji;
+    document.getElementById('previewAvatar').textContent = emoji;
+  }
+
+  function pickTone(val, el){
+    document.querySelectorAll('.tone-opt').forEach(e=>e.classList.remove('sel'));
+    el.classList.add('sel');
+    document.getElementById('toneInput').value = val;
+  }
+
+  function pickProv(val, el){
+    document.querySelectorAll('.prov-opt').forEach(e=>e.classList.remove('sel'));
+    el.classList.add('sel');
+    document.getElementById('provInput').value = val;
+  }
+
+  // Mark locked providers
+  fetch('/providers').then(r=>r.json()).then(s=>{
+    document.querySelectorAll('.prov-opt').forEach(el=>{
+      if(!s[el.dataset.v]) el.classList.add('locked');
+    });
+  }).catch(()=>{});
+
+  // ── Chat ────────────────────────────────────────────────────────────────
+  let chatHistory = [];
+  const aiAvatar = document.querySelector('.chat-ai-av')?.textContent || '🤖';
+
+  function sendSuggest(el){
+    document.getElementById('chatInput').value = el.textContent;
+    el.closest('.suggest-row').style.display='none';
+    sendMsg();
+  }
+
+  function sendMsg(){
+    const inp = document.getElementById('chatInput');
+    const msg = inp.value.trim();
+    if(!msg) return;
+    inp.value=''; inp.style.height='';
+
+    appendMsg('user', msg, '👤');
+    chatHistory.push({role:'user', content: msg});
+
+    showTyping();
+
+    fetch('/my_ai/chat', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg, history: chatHistory})
+    }).then(r=>r.json()).then(d=>{
+      hideTyping();
+      const reply = d.reply || d.error || 'No response.';
+      appendMsg('ai', reply, d.ai_avatar || aiAvatar);
+      chatHistory.push({role:'ai', content: reply});
+    }).catch(()=>{
+      hideTyping();
+      appendMsg('ai', '❌ Connection error. Is Flask running?', aiAvatar);
+    });
+  }
+
+  function appendMsg(role, text, avatar){
+    const msgs = document.getElementById('chatMsgs');
+    const now = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.innerHTML = `
+      <div class="msg-av">${avatar}</div>
+      <div>
+        <div class="msg-bub">${renderMD(text)}</div>
+        <div class="msg-time">${now}</div>
+      </div>`;
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function showTyping(){
+    const t = document.getElementById('typingInd');
+    if(t){ t.style.display='flex'; document.getElementById('chatMsgs').scrollTop=9999; }
+  }
+
+  function hideTyping(){
+    const t = document.getElementById('typingInd');
+    if(t) t.style.display='none';
+  }
+
+  function autoResize(el){
+    el.style.height='auto';
+    el.style.height=Math.min(el.scrollHeight, 120)+'px';
+  }
+
+  function renderMD(t){
+    return String(t)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--accent)">$1</strong>')
+      .replace(/^## (.+)$/gm,'<div style="font-weight:700;color:var(--accent2);margin:10px 0 4px">$1</div>')
+      .replace(/^- (.+)$/gm,'<div style="display:flex;gap:6px;margin:2px 0"><span style="color:var(--accent)">•</span><span>$1</span></div>')
+      .replace(/\n/g,'<br/>');
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% block title %}Settings — Biz-Analyst{% endblock %}
+{% block head %}
+<style>
+  .settings-grid{display:grid;grid-template-columns:220px 1fr;gap:24px;align-items:start}
+  @media(max-width:700px){.settings-grid{grid-template-columns:1fr}}
+  .settings-nav{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;position:sticky;top:80px}
+  .settings-nav a{display:flex;align-items:center;gap:10px;padding:13px 18px;
+                  color:var(--subtext);text-decoration:none;font-size:13px;font-weight:500;
+                  transition:all .2s;border-left:3px solid transparent}
+  .settings-nav a:hover{background:var(--border);color:var(--text)}
+  .settings-nav a.active{background:rgba(137,180,250,.1);color:var(--accent);border-left-color:var(--accent)}
+  .settings-section{background:var(--card);border:1px solid var(--border);border-radius:16px;
+                    padding:28px;margin-bottom:20px}
+  .settings-section h2{font-size:16px;font-weight:700;margin-bottom:20px;
+                        padding-bottom:14px;border-bottom:1px solid var(--border)}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:600px){.form-row{grid-template-columns:1fr}}
+
+  /* Theme picker */
+  .theme-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+  .theme-option{border:2px solid var(--border);border-radius:14px;overflow:hidden;
+                cursor:pointer;transition:all .2s;position:relative}
+  .theme-option:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .theme-option.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+  .theme-preview{height:70px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+  .theme-preview span{display:block}
+  .theme-name{padding:10px;font-size:12px;font-weight:700;text-align:center;background:var(--surface)}
+  .theme-check{position:absolute;top:6px;right:6px;width:20px;height:20px;
+               background:var(--accent);border-radius:50%;display:none;
+               align-items:center;justify-content:center;font-size:11px;color:#0d0d1a}
+  .theme-option.selected .theme-check{display:flex}
+
+  /* AI status */
+  .ai-status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+  .ai-status-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .ai-status-name{font-size:14px;font-weight:700;margin-bottom:6px}
+  .ai-status-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px}
+  .badge-ok{background:rgba(166,227,161,.15);color:#a6e3a1;border:1px solid rgba(166,227,161,.3)}
+  .badge-no{background:rgba(108,112,134,.15);color:var(--muted);border:1px solid var(--border)}
+  .ai-status-hint{font-size:11px;color:var(--muted);margin-top:6px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page">
+  <div class="sec-title" style="margin-bottom:24px"><div class="sec-dot"></div> Settings</div>
+
+  <div class="settings-grid">
+    <div class="settings-nav">
+      <a href="#profile"  class="active">👤 Profile</a>
+      <a href="#password">🔒 Password</a>
+      <a href="#theme">🎨 Theme</a>
+      <a href="#ai">🤖 AI Providers</a>
+    </div>
+
+    <div>
+      <!-- Profile -->
+      <div class="settings-section" id="profile">
+        <h2>👤 Profile Settings</h2>
+        <form method="POST">
+          <input type="hidden" name="action" value="profile"/>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input class="form-input" type="text" name="username" value="{{ current_user.username }}"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input class="form-input" type="email" name="email" value="{{ current_user.email }}"/>
+            </div>
+          </div>
+          <button class="btn btn-primary" type="submit">Save Profile</button>
+        </form>
+      </div>
+
+      <!-- Password -->
+      <div class="settings-section" id="password">
+        <h2>🔒 Change Password</h2>
+        <form method="POST">
+          <input type="hidden" name="action" value="password"/>
+          <div class="form-group">
+            <label class="form-label">Current Password</label>
+            <input class="form-input" type="password" name="old_password" placeholder="Your current password"/>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">New Password</label>
+              <input class="form-input" type="password" name="new_password" placeholder="Min. 6 characters"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm New Password</label>
+              <input class="form-input" type="password" name="confirm_password" placeholder="Repeat new password"/>
+            </div>
+          </div>
+          <button class="btn btn-primary" type="submit">Update Password</button>
+        </form>
+      </div>
+
+      <!-- Theme -->
+      <div class="settings-section" id="theme">
+        <h2>🎨 Theme</h2>
+        <p style="color:var(--subtext);font-size:13px;margin-bottom:20px">Click a theme to apply it instantly.</p>
+        <div class="theme-grid">
+          {% for name, t in themes.items() %}
+          <div class="theme-option {% if current_user.theme==name %}selected{% endif %}"
+               onclick="applyTheme('{{ name }}')" data-theme="{{ name }}">
+            <div class="theme-preview">
+              <span style="background:{{ t.bg }}"></span>
+              <span style="background:{{ t.accent }}"></span>
+              <span style="background:{{ t.card }}"></span>
+              <span style="background:{{ t.accent2 }}"></span>
+            </div>
+            <div class="theme-name" style="background:{{ t.surface }};color:{{ t.text }}">
+              {{ name.title() }}
+            </div>
+            <div class="theme-check">✓</div>
+          </div>
+          {% endfor %}
+        </div>
+        <form method="POST" id="themeForm">
+          <input type="hidden" name="action" value="theme"/>
+          <input type="hidden" name="theme" id="themeInput" value="{{ current_user.theme }}"/>
+          <button class="btn btn-primary" type="submit">Apply Theme</button>
+        </form>
+      </div>
+
+      <!-- AI Providers -->
+      <div class="settings-section" id="ai">
+        <h2>🤖 AI Provider Status</h2>
+        <p style="color:var(--subtext);font-size:13px;margin-bottom:18px">
+          To enable an AI, open <code style="background:var(--surface);padding:2px 6px;border-radius:4px">app.py</code>
+          and paste your key in the <code style="background:var(--surface);padding:2px 6px;border-radius:4px">API_KEYS</code> section.
+        </p>
+        <div class="ai-status-grid">
+          {% set providers = [('gemini','🟢 Gemini','FREE','https://aistudio.google.com/app/apikey'),
+                              ('chatgpt','🟡 ChatGPT','Paid','https://platform.openai.com/api-keys'),
+                              ('claude','🟣 Claude','Paid','https://console.anthropic.com/settings/keys'),
+                              ('deepseek','🔵 DeepSeek','Cheap','https://platform.deepseek.com/api_keys')] %}
+          {% for key, label, cost, link in providers %}
+          <div class="ai-status-card">
+            <div class="ai-status-name">{{ label }}</div>
+            <span class="ai-status-badge badge-no" id="badge-{{ key }}">Not configured</span>
+            <div class="ai-status-hint">{{ cost }} — <a href="{{ link }}" target="_blank" style="color:var(--accent)">Get key</a></div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  // Check provider status
+  fetch('/providers').then(r=>r.json()).then(s=>{
+    for(const [p,ok] of Object.entries(s)){
+      const b=document.getElementById('badge-'+p);
+      if(b&&ok){b.textContent='✅ Configured';b.className='ai-status-badge badge-ok'}
+    }
+  });
+
+  function applyTheme(name){
+    document.querySelectorAll('.theme-option').forEach(el=>{
+      el.classList.toggle('selected', el.dataset.theme===name);
+    });
+    document.getElementById('themeInput').value=name;
+  }
+</script>
+{% endblock %}
