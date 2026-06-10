@@ -79,7 +79,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TMP_DIR  = os.path.join(BASE_DIR, 'tmp_data')
 os.makedirs(TMP_DIR, exist_ok=True)
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='.')
 app.config['SECRET_KEY']         = 'biz-analyst-secret-2024'
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'bizanalyst.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
