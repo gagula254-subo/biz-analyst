@@ -10,6 +10,31 @@
               padding:10px 15px;color:var(--text);font-size:14px;font-family:'Inter',sans-serif;
               outline:none;width:100%;max-width:320px;transition:border-color .2s;margin-bottom:16px}
   .search-bar:focus{border-color:var(--accent)}
+
+  /* Invite card */
+  .invite-card{background:linear-gradient(135deg,rgba(137,180,250,.08),rgba(203,166,247,.08));
+               border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:28px}
+  .invite-title{font-size:15px;font-weight:700;margin-bottom:6px}
+  .invite-sub{font-size:13px;color:var(--subtext);margin-bottom:16px}
+  .invite-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .invite-link-box{flex:1;background:var(--surface);border:1px solid var(--border);
+                   border-radius:10px;padding:11px 16px;color:var(--accent);
+                   font-size:13px;font-family:monospace;min-width:200px;
+                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .copy-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));
+            color:#0d0d1a;-webkit-text-fill-color:#0d0d1a;border:none;
+            border-radius:10px;padding:11px 20px;font-size:13px;font-weight:700;
+            cursor:pointer;transition:opacity .2s;white-space:nowrap}
+  .copy-btn:hover{opacity:.85}
+  .copy-success{display:none;color:var(--green);font-size:12px;font-weight:600;margin-top:8px}
+
+  /* Role toggle */
+  .role-toggle{display:flex;gap:6px}
+  .role-btn{background:var(--surface);border:1px solid var(--border);color:var(--subtext);
+            font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;
+            cursor:pointer;transition:all .2s}
+  .role-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .role-btn.promote{border-color:rgba(203,166,247,.4);color:#cba6f7}
 </style>
 {% endblock %}
 {% block content %}
@@ -46,6 +71,29 @@
       <div class="stat-label">Regular Users</div>
       <div class="stat-value">{{ users|selectattr('role','equalto','user')|list|length }}</div>
       <div class="stat-sub">standard accounts</div>
+    </div>
+  </div>
+
+  <!-- Invite Section -->
+  <div class="sec-title"><div class="sec-dot"></div> Invite Users</div>
+  <div class="invite-card">
+    <div class="invite-title">🔗 Share Registration Link</div>
+    <div class="invite-sub">Send this link to anyone you want to join as a regular user. They sign up and get instant access.</div>
+    <div class="invite-row">
+      <div class="invite-link-box" id="inviteLink"></div>
+      <button class="copy-btn" onclick="copyLink()">📋 Copy Link</button>
+      <button class="copy-btn" onclick="shareLink()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);-webkit-text-fill-color:var(--text)">
+        📤 Share
+      </button>
+    </div>
+    <div class="copy-success" id="copySuccess">✅ Link copied to clipboard!</div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--subtext);margin-bottom:10px">Quick invite via:</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="shareEmail()">📧 Email</button>
+        <button class="btn btn-ghost btn-sm" onclick="shareWhatsApp()">💬 WhatsApp</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyLink()">🔗 Copy Link</button>
+      </div>
     </div>
   </div>
 
@@ -93,14 +141,16 @@
             <td style="font-weight:600;color:var(--accent)">{{ u.analyses_count }}</td>
             <td style="color:var(--subtext)">{{ u.created_at.strftime('%d %b %Y') }}</td>
             <td>
-              {% if u.role != 'admin' %}
-              <form method="POST" action="{{ url_for('delete_user', uid=u.id) }}"
-                    onsubmit="return confirm('Delete {{ u.username }}? This cannot be undone.')">
-                <button class="btn btn-danger btn-sm" type="submit">Delete</button>
-              </form>
-              {% else %}
-              <span style="color:var(--muted);font-size:12px">—</span>
-              {% endif %}
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                {% if u.role != 'admin' %}
+                <form method="POST" action="{{ url_for('delete_user', uid=u.id) }}"
+                      onsubmit="return confirm('Delete {{ u.username }}? This cannot be undone.')">
+                  <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+                </form>
+                {% else %}
+                <span style="color:var(--muted);font-size:12px">—</span>
+                {% endif %}
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -114,6 +164,55 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  // Set invite link dynamically
+  const baseUrl = window.location.origin;
+  const inviteUrl = baseUrl + '/register';
+  document.getElementById('inviteLink').textContent = inviteUrl;
+
+  function copyLink(){
+    navigator.clipboard.writeText(inviteUrl).then(()=>{
+      const s = document.getElementById('copySuccess');
+      s.style.display='block';
+      setTimeout(()=>s.style.display='none', 3000);
+    }).catch(()=>{
+      // Fallback for older browsers
+      const el = document.createElement('textarea');
+      el.value = inviteUrl;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      const s = document.getElementById('copySuccess');
+      s.style.display='block';
+      setTimeout(()=>s.style.display='none', 3000);
+    });
+  }
+
+  function shareEmail(){
+    const subject = encodeURIComponent('Join me on Biz-Analyst');
+    const body = encodeURIComponent(
+      `Hi,\n\nI'd like to invite you to join Biz-Analyst — a smart AI data analysis platform.\n\nSign up here: ${inviteUrl}\n\nSee you there!`
+    );
+    window.open(`mailto:?subject=${subject}&body=${body}`);
+  }
+
+  function shareWhatsApp(){
+    const msg = encodeURIComponent(`Join me on Biz-Analyst! Sign up here: ${inviteUrl}`);
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  }
+
+  function shareLink(){
+    if(navigator.share){
+      navigator.share({
+        title: 'Join Biz-Analyst',
+        text: 'Sign up for Biz-Analyst — AI data analysis platform',
+        url: inviteUrl
+      });
+    } else {
+      copyLink();
+    }
+  }
+
   function filterUsers(){
     const q=document.getElementById('userSearch').value.toLowerCase();
     document.querySelectorAll('.user-row').forEach(row=>{
