@@ -28,7 +28,7 @@ import urllib.error
 
 def call_gemini_http(api_key, prompt):
     """Call Gemini API using only built-in Python urllib — no extra packages needed."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={api_key}"
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}]
     }).encode('utf-8')
@@ -69,21 +69,24 @@ except: PPTX_OK = False
 #  Claude  (paid) → https://console.anthropic.com/settings/keys
 # ─────────────────────────────────────────────────────────────────────────────
 API_KEYS = {
-    "gemini":   "YOUR_GEMINI_API_KEY",
-    "chatgpt":  "YOUR_OPENAI_API_KEY",
-    "claude":   "YOUR_CLAUDE_API_KEY",
-    "deepseek": "YOUR_DEEPSEEK_API_KEY",
+    "gemini":   os.environ.get('GEMINI_API_KEY',   'YOUR_GEMINI_API_KEY'),
+    "chatgpt":  os.environ.get('OPENAI_API_KEY',   'YOUR_OPENAI_API_KEY'),
+    "claude":   os.environ.get('CLAUDE_API_KEY',   'YOUR_CLAUDE_API_KEY'),
+    "deepseek": os.environ.get('DEEPSEEK_API_KEY', 'YOUR_DEEPSEEK_API_KEY'),
 }
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TMP_DIR  = os.path.join(BASE_DIR, 'tmp_data')
 os.makedirs(TMP_DIR, exist_ok=True)
 
-app = Flask(__name__, template_folder='.')
-app.config['SECRET_KEY']         = 'biz-analyst-secret-2024'
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'bizanalyst.db')}"
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'biz-analyst-secret-2024')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URL',
+    f"sqlite:///{os.path.join(BASE_DIR, 'bizanalyst.db')}"
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -274,108 +277,277 @@ def base_layout(title='', theme=None):
     return dict(
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         font=dict(color=t['text'], family='Inter,sans-serif', size=12),
-        margin=dict(l=10,r=10,t=48,b=36),
-        title=dict(text=title, font=dict(size=14, color=t['text'])),
-        legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color=t['text'])),
-        xaxis=dict(gridcolor=t['border'], zerolinecolor=t['border'], color=t['text']),
-        yaxis=dict(gridcolor=t['border'], zerolinecolor=t['border'], color=t['text']),
+        margin=dict(l=50, r=30, t=55, b=50),
+        title=dict(text=title, font=dict(size=14, color=t['text']), x=0.01),
+        legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color=t['text']),
+                    bordercolor=t['border'], borderwidth=1),
+        xaxis=dict(gridcolor=t['border'], zerolinecolor=t['border'],
+                   color=t['text'], showgrid=True, tickangle=-30),
+        yaxis=dict(gridcolor=t['border'], zerolinecolor=t['border'],
+                   color=t['text'], showgrid=True),
+        hoverlabel=dict(bgcolor=t['card'], font_color=t['text'], bordercolor=t['border']),
     )
 
 def make_chart(fig, title, icon):
     enc = plotly.utils.PlotlyJSONEncoder()
-    return {'title':title,'icon':icon,'data':json.loads(enc.encode(fig))}
+    return {'title': title, 'icon': icon, 'data': json.loads(enc.encode(fig))}
+
+def smart_detect_date_col(df):
+    """Detect date/time columns for accurate trend analysis."""
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            try:
+                converted = pd.to_datetime(df[col], infer_datetime_format=True, errors='coerce')
+                if converted.notna().sum() > len(df) * 0.7:
+                    return col, converted
+            except Exception:
+                pass
+    return None, None
+
+def clean_numeric(df, col):
+    """Return clean numeric series without nulls."""
+    return df[col].dropna().replace([float('inf'), float('-inf')], float('nan')).dropna()
 
 def generate_charts(df, analysis_type='general', specific_cols=None, theme=None):
-    charts=[]
-    num=df.select_dtypes(include='number').columns.tolist()
-    cat=df.select_dtypes(include='object').columns.tolist()
-    fn=specific_cols or []
-    fc=[c for c in fn if c in num] or num[:6]
-    fcat=[c for c in fn if c in cat] or cat[:3]
-    a=analysis_type.lower()
-    t=theme or THEMES['dark']
-    cs=[t['accent'],t['accent2']]+COLORS
+    charts = []
+    t = theme or THEMES['dark']
+    cs = [t['accent'], t['accent2']] + COLORS
+
+    # Smart column detection
+    num = df.select_dtypes(include='number').columns.tolist()
+    cat = df.select_dtypes(include='object').columns.tolist()
+
+    # Remove low-quality columns
+    num = [c for c in num if clean_numeric(df, c).nunique() > 1]
+    cat = [c for c in cat if df[c].nunique() <= 50 and df[c].nunique() > 1]
+
+    fn   = specific_cols or []
+    fc   = [c for c in fn if c in num] or num[:6]
+    fcat = [c for c in fn if c in cat] or cat[:3]
+    a    = analysis_type.lower()
+
+    # Detect date column
+    date_col, date_series = smart_detect_date_col(df)
 
     def safe(fn):
         try: fn()
-        except: pass
+        except Exception: pass
 
-    # 1. Bar chart
+    # ── 1. Sorted Bar Chart (most accurate for comparisons) ──
     if fcat and fc:
         def _bar():
-            g=df.groupby(fcat[0])[fc[0]].sum().reset_index().sort_values(fc[0],ascending=False).head(15)
-            fig=px.bar(g,x=fcat[0],y=fc[0],color=fc[0],color_continuous_scale='Blues',
-                       labels={fc[0]:fc[0],fcat[0]:fcat[0]})
-            fig.update_layout(**base_layout(f'{fc[0]} by {fcat[0]}',t))
-            fig.update_traces(marker_line_width=0)
-            charts.append(make_chart(fig,f'{fc[0]} by {fcat[0]}','📊'))
+            g = df.groupby(fcat[0])[fc[0]].agg(['sum','mean','count']).reset_index()
+            g.columns = [fcat[0], 'Total', 'Average', 'Count']
+            g = g.sort_values('Total', ascending=False).head(15)
+            fig = px.bar(g, x=fcat[0], y='Total',
+                         text='Total',
+                         color='Total',
+                         color_continuous_scale='Blues',
+                         labels={'Total': fc[0], fcat[0]: fcat[0]},
+                         hover_data={'Average': ':.2f', 'Count': True})
+            fig.update_traces(
+                texttemplate='%{text:,.0f}',
+                textposition='outside',
+                marker_line_width=0
+            )
+            fig.update_layout(**base_layout(f'Total {fc[0]} by {fcat[0]}', t))
+            fig.update_layout(showlegend=False)
+            charts.append(make_chart(fig, f'Total {fc[0]} by {fcat[0]}', '📊'))
         safe(_bar)
 
-    # 2. Donut pie
+    # ── 2. Accurate Donut with percentages ──
     if fcat:
         def _pie():
-            c=df[fcat[0]].value_counts().head(8).reset_index()
-            c.columns=[fcat[0],'count']
-            fig=px.pie(c,names=fcat[0],values='count',hole=0.42,color_discrete_sequence=cs)
-            fig.update_layout(**base_layout(f'Share of {fcat[0]}',t))
-            fig.update_traces(textfont_color=t['text'])
-            charts.append(make_chart(fig,f'Share of {fcat[0]}','🍩'))
+            vc = df[fcat[0]].value_counts().head(8).reset_index()
+            vc.columns = [fcat[0], 'Count']
+            vc['Percentage'] = (vc['Count'] / vc['Count'].sum() * 100).round(1)
+            fig = px.pie(vc, names=fcat[0], values='Count', hole=0.42,
+                         color_discrete_sequence=cs,
+                         hover_data={'Percentage': True})
+            fig.update_traces(
+                textinfo='percent+label',
+                textfont_size=12,
+                textfont_color=t['text'],
+                hovertemplate='<b>%{label}</b><br>Count: %{value:,}<br>Share: %{percent}<extra></extra>'
+            )
+            fig.update_layout(**base_layout(f'Distribution of {fcat[0]}', t))
+            charts.append(make_chart(fig, f'Distribution of {fcat[0]}', '🍩'))
         safe(_pie)
 
-    # 3. Line / area trend
-    if fc:
+    # ── 3. Time-series line chart (if date column exists) ──
+    if date_col and fc:
+        def _timeseries():
+            tmp = df.copy()
+            tmp['_date'] = date_series
+            tmp = tmp.dropna(subset=['_date']).sort_values('_date')
+            fig = go.Figure()
+            for i, col in enumerate(fc[:4]):
+                s = clean_numeric(tmp, col)
+                if len(s) < 2: continue
+                fig.add_trace(go.Scatter(
+                    x=tmp['_date'], y=tmp[col],
+                    mode='lines+markers', name=col,
+                    line=dict(color=cs[i % len(cs)], width=2),
+                    marker=dict(size=4),
+                    hovertemplate=f'<b>{col}</b><br>Date: %{{x}}<br>Value: %{{y:,.2f}}<extra></extra>'
+                ))
+            fig.update_layout(**base_layout('Time Series Trend', t))
+            charts.append(make_chart(fig, 'Time Series Trend', '📅'))
+        safe(_timeseries)
+    elif fc:
+        # ── 3b. Area trend chart ──
         def _line():
-            fig=go.Figure()
-            for i,col in enumerate(fc[:4]):
-                fig.add_trace(go.Scatter(y=df[col].dropna().head(300),mode='lines',name=col,
-                    fill='tozeroy' if i==0 else 'none',
-                    line=dict(color=cs[i%len(cs)],width=2.5),
-                    fillcolor=f'rgba(137,180,250,0.05)'))
-            fig.update_layout(**base_layout('Trend Analysis',t))
-            charts.append(make_chart(fig,'Trend Analysis','📈'))
+            fig = go.Figure()
+            for i, col in enumerate(fc[:4]):
+                s = clean_numeric(df, col)
+                if len(s) < 2: continue
+                fig.add_trace(go.Scatter(
+                    y=s.values, mode='lines', name=col,
+                    fill='tozeroy' if i == 0 else 'none',
+                    line=dict(color=cs[i % len(cs)], width=2.5),
+                    fillcolor='rgba(137,180,250,0.06)',
+                    hovertemplate=f'<b>{col}</b><br>Index: %{{x}}<br>Value: %{{y:,.2f}}<extra></extra>'
+                ))
+            fig.update_layout(**base_layout('Trend Analysis', t))
+            charts.append(make_chart(fig, 'Trend Analysis', '📈'))
         safe(_line)
 
-    # 4. Histogram
+    # ── 4. Histogram with stats overlay ──
     if fc:
         def _hist():
-            fig=px.histogram(df,x=fc[0],nbins=30,color_discrete_sequence=[t['accent']])
-            fig.update_layout(**base_layout(f'Distribution of {fc[0]}',t))
+            s = clean_numeric(df, fc[0])
+            mean_val = s.mean()
+            median_val = s.median()
+            fig = px.histogram(df, x=fc[0], nbins=30,
+                               color_discrete_sequence=[t['accent']],
+                               marginal='box',
+                               hover_data=df.columns)
+            fig.add_vline(x=mean_val, line_dash='dash', line_color=t['accent2'],
+                          annotation_text=f'Mean: {mean_val:,.2f}',
+                          annotation_font_color=t['accent2'])
+            fig.add_vline(x=median_val, line_dash='dot', line_color=t['green'] if 'green' in t else '#a6e3a1',
+                          annotation_text=f'Median: {median_val:,.2f}',
+                          annotation_font_color=t.get('green','#a6e3a1'),
+                          annotation_position='bottom right')
+            fig.update_layout(**base_layout(f'Distribution of {fc[0]}', t))
             fig.update_traces(marker_line_width=0)
-            charts.append(make_chart(fig,f'Distribution of {fc[0]}','📉'))
+            charts.append(make_chart(fig, f'Distribution of {fc[0]}', '📉'))
         safe(_hist)
 
-    # 5. Scatter with trendline
-    if len(fc)>=2:
+    # ── 5. Scatter with trendline & R² ──
+    if len(fc) >= 2:
         def _scatter():
-            kw=dict(color=fcat[0],color_discrete_sequence=cs) if fcat else dict(color_discrete_sequence=[t['accent2']])
+            tmp = df[[fc[0], fc[1]]].dropna()
+            if len(tmp) < 5: return
+            kw = dict(color=fcat[0], color_discrete_sequence=cs) if fcat else dict(color_discrete_sequence=[t['accent2']])
             try:
-                fig=px.scatter(df.head(500),x=fc[0],y=fc[1],trendline='ols',**kw)
-            except:
-                fig=px.scatter(df.head(500),x=fc[0],y=fc[1],**kw)
-            fig.update_layout(**base_layout(f'{fc[0]} vs {fc[1]}',t))
-            fig.update_traces(marker=dict(size=6,opacity=0.75))
-            charts.append(make_chart(fig,f'{fc[0]} vs {fc[1]}','🔵'))
+                fig = px.scatter(tmp, x=fc[0], y=fc[1], trendline='ols',
+                                 trendline_color_override=t['accent2'],
+                                 opacity=0.75, **kw)
+            except Exception:
+                fig = px.scatter(tmp, x=fc[0], y=fc[1],
+                                 opacity=0.75, **kw)
+            fig.update_traces(marker=dict(size=7, line=dict(width=0)))
+            fig.update_layout(**base_layout(f'{fc[0]} vs {fc[1]}', t))
+            charts.append(make_chart(fig, f'{fc[0]} vs {fc[1]}', '🔵'))
         safe(_scatter)
 
-    # 6. Box plot
+    # ── 6. Box plot with outlier detection ──
     if fc and fcat:
         def _box():
-            fig=px.box(df,x=fcat[0],y=fc[0],color=fcat[0],color_discrete_sequence=cs,
-                       points='outliers')
-            fig.update_layout(**base_layout(f'{fc[0]} by {fcat[0]}',t))
-            charts.append(make_chart(fig,f'{fc[0]} spread','📦'))
+            fig = px.box(df, x=fcat[0], y=fc[0],
+                         color=fcat[0], color_discrete_sequence=cs,
+                         points='outliers', notched=False,
+                         hover_data={fc[0]: ':.2f'})
+            fig.update_layout(**base_layout(f'{fc[0]} spread by {fcat[0]}', t))
+            fig.update_traces(marker_size=4, line_width=1.5)
+            charts.append(make_chart(fig, f'{fc[0]} spread by {fcat[0]}', '📦'))
         safe(_box)
 
-    # 7. Correlation heatmap
-    if len(fc)>=2:
+    # ── 7. Correlation Heatmap (accurate values) ──
+    if len(fc) >= 2:
         def _heatmap():
-            corr=df[fc].corr().round(3)
-            fig=px.imshow(corr,text_auto=True,color_continuous_scale='RdBu_r',zmin=-1,zmax=1,
-                          aspect='auto')
-            fig.update_layout(**base_layout('Correlation Heatmap',t))
-            charts.append(make_chart(fig,'Correlation Heatmap','🔥'))
+            corr = df[fc].corr(method='pearson').round(3)
+            fig = px.imshow(corr,
+                            text_auto='.2f',
+                            color_continuous_scale='RdBu_r',
+                            zmin=-1, zmax=1, aspect='auto',
+                            labels=dict(color='Correlation'))
+            fig.update_traces(
+                hovertemplate='<b>%{x}</b> vs <b>%{y}</b><br>Correlation: %{z:.3f}<extra></extra>'
+            )
+            fig.update_layout(**base_layout('Correlation Heatmap', t))
+            charts.append(make_chart(fig, 'Correlation Heatmap', '🔥'))
         safe(_heatmap)
 
+    # ── 8. Grouped Bar (2 metrics side by side) ──
+    if len(fc) >= 2 and fcat:
+        def _gbar():
+            g = df.groupby(fcat[0])[fc[:3]].sum().reset_index().head(12)
+            fig = px.bar(g, x=fcat[0], y=fc[:3],
+                         barmode='group',
+                         color_discrete_sequence=cs,
+                         text_auto='.2s')
+            fig.update_layout(**base_layout(f'Comparison: {" vs ".join(fc[:3])}', t))
+            fig.update_traces(marker_line_width=0, textposition='outside')
+            charts.append(make_chart(fig, f'Multi-metric Comparison', '📊'))
+        safe(_gbar)
+
+    # ── 9. Violin plot (distribution shape) ──
+    if fc and fcat and df[fcat[0]].nunique() <= 10:
+        def _violin():
+            fig = px.violin(df, x=fcat[0], y=fc[0],
+                            color=fcat[0], color_discrete_sequence=cs,
+                            box=True, points='outliers')
+            fig.update_layout(**base_layout(f'{fc[0]} distribution by {fcat[0]}', t))
+            charts.append(make_chart(fig, f'{fc[0]} violin', '🎻'))
+        safe(_violin)
+
+    # ── 10. Cumulative line chart ──
+    if fc:
+        def _cumulative():
+            s = clean_numeric(df, fc[0]).sort_values().reset_index(drop=True)
+            cumsum = s.cumsum()
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=list(range(len(s))), y=cumsum,
+                mode='lines', name=f'Cumulative {fc[0]}',
+                line=dict(color=cs[0], width=2),
+                fill='tozeroy', fillcolor=f'rgba(137,180,250,0.07)',
+                hovertemplate=f'Index: %{{x}}<br>Cumulative: %{{y:,.2f}}<extra></extra>'
+            ))
+            fig.update_layout(**base_layout(f'Cumulative {fc[0]}', t))
+            charts.append(make_chart(fig, f'Cumulative {fc[0]}', '📐'))
+        safe(_cumulative)
+
+    # ── 11. 3D Scatter ──
+    if len(fc) >= 3:
+        def _3d():
+            fig = px.scatter_3d(df.head(300), x=fc[0], y=fc[1], z=fc[2],
+                                color=fcat[0] if fcat else None,
+                                color_discrete_sequence=cs,
+                                opacity=0.75)
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color=t['text']),
+                margin=dict(l=0, r=0, t=45, b=0)
+            )
+            charts.append(make_chart(fig, '3D Analysis', '🌐'))
+        safe(_3d)
+
+    # ── 12. Funnel / Waterfall for ranking ──
+    if fcat and fc and ('rank' in a or 'top' in a or 'sales' in a or 'revenue' in a):
+        def _funnel():
+            g = df.groupby(fcat[0])[fc[0]].sum().reset_index()
+            g = g.sort_values(fc[0], ascending=False).head(8)
+            if len(g) >= 2:
+                fig = px.funnel(g, x=fc[0], y=fcat[0],
+                                color_discrete_sequence=cs)
+                fig.update_layout(**base_layout(f'Funnel: {fc[0]} by {fcat[0]}', t))
+                charts.append(make_chart(fig, 'Funnel Ranking', '🔻'))
+        safe(_funnel)
+
+    return charts
     # 8. Grouped bar (2 metrics)
     if len(fc)>=2 and fcat:
         def _gbar():
@@ -426,21 +598,41 @@ def generate_charts(df, analysis_type='general', specific_cols=None, theme=None)
     return charts
 
 def build_summary(df):
-    num=df.select_dtypes(include='number')
-    missing=df.isnull().sum()
-    cards=[]
+    num = df.select_dtypes(include='number')
+    missing = df.isnull().sum()
+    cards = []
     for col in num.columns[:6]:
-        s=num[col].dropna()
-        cards.append({'label':col,'total':f"{s.sum():,.0f}",'avg':f"{s.mean():,.2f}",
-                      'max':f"{s.max():,.2f}",'min':f"{s.min():,.2f}",'count':int(s.count())})
+        s = num[col].dropna()
+        if len(s) == 0: continue
+        cards.append({
+            'label': col,
+            'total': f"{s.sum():,.2f}",
+            'avg':   f"{s.mean():,.2f}",
+            'max':   f"{s.max():,.2f}",
+            'min':   f"{s.min():,.2f}",
+            'median':f"{s.median():,.2f}",
+            'std':   f"{s.std():,.2f}",
+            'count': int(s.count()),
+        })
+
+    # Detect date column
+    date_col, _ = smart_detect_date_col(df)
+
+    # Duplicate count
+    duplicate_count = int(df.duplicated().sum())
+
     return {
-        'rows':int(df.shape[0]),'columns':int(df.shape[1]),
-        'column_names':list(df.columns),
-        'numeric_columns':list(num.columns),
+        'rows':               int(df.shape[0]),
+        'columns':            int(df.shape[1]),
+        'column_names':       list(df.columns),
+        'numeric_columns':    list(num.columns),
         'categorical_columns':list(df.select_dtypes(include='object').columns),
-        'missing_values':{c:int(v) for c,v in missing.items() if v>0},
-        'total_missing':int(missing.sum()),
-        'stat_cards':cards,
+        'missing_values':     {c: int(v) for c, v in missing.items() if v > 0},
+        'total_missing':      int(missing.sum()),
+        'duplicate_rows':     duplicate_count,
+        'date_column':        date_col,
+        'stat_cards':         cards,
+        'memory_kb':          round(df.memory_usage(deep=True).sum() / 1024, 1),
     }
 
 def build_prompt(df,filename,analysis_type,questions,specific_cols):
@@ -1120,10 +1312,10 @@ def editor_undo():
                         'shape': [int(df.shape[0]), int(df.shape[1])]})
     return jsonify({'error': 'No backup to undo to'}), 400
 
+
 if __name__=='__main__':
     with app.app_context():
         db.create_all()
     port = int(os.environ.get('PORT', 8080))
     app.run(debug=False, host='0.0.0.0', port=port)
-
 
