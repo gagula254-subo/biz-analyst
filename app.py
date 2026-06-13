@@ -28,7 +28,7 @@ import urllib.error
 
 def call_gemini_http(api_key, prompt):
     """Call Gemini API using only built-in Python urllib — no extra packages needed."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}]
     }).encode('utf-8')
