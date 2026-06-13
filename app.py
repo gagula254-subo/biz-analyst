@@ -80,13 +80,23 @@ TMP_DIR  = os.path.join(BASE_DIR, 'tmp_data')
 os.makedirs(TMP_DIR, exist_ok=True)
 
 app = Flask(__name__, template_folder='.')
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'biz-analyst-secret-2024')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'biz-analyst-secret-key-2024-xyz')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
     'DATABASE_URL',
     f"sqlite:///{os.path.join(BASE_DIR, 'bizanalyst.db')}"
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+
+# ── Session config — remember users for 30 days ───────────────────────────────
+from datetime import timedelta
+app.config['REMEMBER_COOKIE_DURATION']  = timedelta(days=30)
+app.config['REMEMBER_COOKIE_SECURE']    = False
+app.config['REMEMBER_COOKIE_HTTPONLY']  = True
+app.config['SESSION_COOKIE_SECURE']     = False
+app.config['SESSION_COOKIE_HTTPONLY']   = True
+app.config['SESSION_COOKIE_SAMESITE']   = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME']= timedelta(days=30)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -714,7 +724,9 @@ def register():
         role='admin' if User.query.count()==0 else 'user'
         u=User(username=username,email=email,role=role)
         u.set_password(password); db.session.add(u); db.session.commit()
-        login_user(u)
+        login_user(u, remember=True)
+        from flask import session as flask_session
+        flask_session.permanent = True
         flash(f'Welcome, {username}! Account created.','success')
         return redirect(url_for('dashboard'))
     return render_template('register.html', users_exist=User.query.count()>0)
@@ -728,6 +740,8 @@ def login():
         u=User.query.filter_by(email=email).first()
         if u and u.check_password(password):
             login_user(u, remember=True)
+            from flask import session as flask_session
+            flask_session.permanent = True
             flash(f'Welcome back, {u.username}!','success')
             return redirect(url_for('dashboard'))
         flash('Invalid email or password.','error')
